@@ -1,0 +1,315 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+// ─────────────────────────────────────────────────────────
+// Enums
+// ─────────────────────────────────────────────────────────
+
+enum Role {
+  SUPER_ADMIN
+  ORGANIZATION_ADMIN
+  STORE_MANAGER
+  EMPLOYEE
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+}
+
+enum AttendanceMethod {
+  QR
+  MANUAL
+}
+
+enum CorrectionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum PayrollStatus {
+  DRAFT
+  FINALIZED
+}
+
+// ─────────────────────────────────────────────────────────
+// Organization — tenant root
+// ─────────────────────────────────────────────────────────
+
+model Organization {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users  User[]
+  stores Store[]
+}
+
+// ─────────────────────────────────────────────────────────
+// User — authentication/account identity (all roles)
+// ─────────────────────────────────────────────────────────
+
+model User {
+  id             String   @id @default(uuid()) @db.Uuid
+  email          String   @unique
+  passwordHash   String
+  role           Role
+  organizationId String?  @db.Uuid
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  employee Employee?
+  manager  Manager?
+
+  markedAttendances Attendance[]
+  authoredNotes     EmployeeNote[]
+  recordedPayments  PaymentLedger[]
+  finalizedPayrolls Payroll[]
+
+  requestedCorrections AttendanceCorrection[] @relation("CorrectionRequestedBy")
+  reviewedCorrections  AttendanceCorrection[] @relation("CorrectionReviewedBy")
+
+  // Composite-FK target: lets Employee/Manager enforce that their
+  // organizationId matches the organizationId of the User they belong to.
+  @@unique([id, organizationId])
+  @@index([organizationId])
+}
+
+// ─────────────────────────────────────────────────────────
+// Store — physical location under an Organization
+// ─────────────────────────────────────────────────────────
+
+model Store {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  name           String
+  address        String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  employees   Employee[]
+  managers    Manager[]
+  attendances Attendance[]
+  payrolls    Payroll[]
+
+  // (organizationId, name) leading column also serves plain
+  // "all stores in this organization" lookups — no separate index needed.
+  @@unique([organizationId, name])
+  // Composite-FK target: lets Employee/Manager/Attendance/Payroll enforce
+  // that their organizationId matches the organizationId of the Store they reference.
+  @@unique([id, organizationId])
+}
+
+// ─────────────────────────────────────────────────────────
+// Employee — wage-earning workforce record
+// ─────────────────────────────────────────────────────────
+
+model Employee {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @unique @db.Uuid
+  organizationId String   @db.Uuid
+  storeId        String   @db.Uuid
+  dailyWage      Decimal  @db.Decimal(10, 2)
+  qrCodeToken    String   @unique @default(uuid())
+  joinedAt       DateTime @db.Date
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Composite FKs: organizationId must match both the linked User's org
+  // and the linked Store's org — enforced by Postgres, not just app code.
+  user  User  @relation(fields: [userId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  store Store @relation(fields: [storeId, organizationId], references: [id, organizationId], onDelete: Restrict)
+
+  notes       EmployeeNote[]
+  attendances Attendance[]
+  payrolls    Payroll[]
+  payments    PaymentLedger[]
+
+  // Composite-FK target: lets Attendance/Payroll/PaymentLedger enforce
+  // that their organizationId matches this Employee's organizationId.
+  @@unique([id, organizationId])
+  // Required by Prisma for the composite 1:1 relation to `User` above:
+  // the defining side's referencing fields must themselves be unique.
+  @@unique([userId, organizationId])
+  @@index([storeId])
+  @@index([organizationId])
+  @@index([storeId, isActive])
+}
+
+// ─────────────────────────────────────────────────────────
+// Manager — operational workforce record (no wage/payroll fields)
+// ─────────────────────────────────────────────────────────
+
+model Manager {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @unique @db.Uuid
+  organizationId String   @db.Uuid
+  storeId        String   @db.Uuid
+  joinedAt       DateTime @db.Date
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Composite FKs: same tenant-consistency guarantee as Employee.
+  user  User  @relation(fields: [userId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  store Store @relation(fields: [storeId, organizationId], references: [id, organizationId], onDelete: Restrict)
+
+  // Required by Prisma for the composite 1:1 relation to `User` above.
+  @@unique([userId, organizationId])
+  @@index([storeId])
+  @@index([organizationId])
+}
+
+// ─────────────────────────────────────────────────────────
+// EmployeeNote — free-text note about an employee (append-only)
+// ─────────────────────────────────────────────────────────
+
+model EmployeeNote {
+  id           String   @id @default(uuid()) @db.Uuid
+  employeeId   String   @db.Uuid
+  authorUserId String   @db.Uuid
+  body         String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Plain FKs — tenant ownership is derived through Employee, no
+  // organizationId column here and no composite-FK needed.
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  author   User     @relation(fields: [authorUserId], references: [id], onDelete: Restrict)
+
+  @@index([employeeId, createdAt])
+}
+
+// ─────────────────────────────────────────────────────────
+// Attendance — daily attendance fact (immutable once created)
+// ─────────────────────────────────────────────────────────
+
+model Attendance {
+  id             String           @id @default(uuid()) @db.Uuid
+  employeeId     String           @db.Uuid
+  storeId        String           @db.Uuid
+  organizationId String           @db.Uuid
+  date           DateTime         @db.Date
+  status         AttendanceStatus
+  method         AttendanceMethod
+  checkInAt      DateTime?
+  markedByUserId String           @db.Uuid
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  // storeId is intentionally independent of employee.storeId: it records
+  // where the attendance actually happened, so it stays correct even after
+  // the employee is later reassigned to a different store.
+  employee Employee @relation(fields: [employeeId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  store    Store    @relation(fields: [storeId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  markedBy User     @relation(fields: [markedByUserId], references: [id], onDelete: Restrict)
+
+  corrections AttendanceCorrection[]
+
+  // One attendance record per employee per calendar day.
+  @@unique([employeeId, date])
+  // Composite-FK target: lets AttendanceCorrection enforce that its
+  // organizationId matches the Attendance row it corrects.
+  @@unique([id, organizationId])
+  @@index([storeId, date])
+  @@index([organizationId, status])
+}
+
+// ─────────────────────────────────────────────────────────
+// AttendanceCorrection — audit record for a requested attendance change
+// ─────────────────────────────────────────────────────────
+
+model AttendanceCorrection {
+  id                String           @id @default(uuid()) @db.Uuid
+  attendanceId      String           @db.Uuid
+  organizationId    String           @db.Uuid
+  requestedByUserId String           @db.Uuid
+  reviewedByUserId  String?          @db.Uuid
+  proposedStatus    AttendanceStatus
+  reason            String
+  status            CorrectionStatus @default(PENDING)
+  reviewedAt        DateTime?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  // On approval, the application layer updates Attendance.status directly.
+  // This row is kept permanently afterward as the audit record — it is
+  // never used to physically replace or delete the original Attendance row.
+  attendance  Attendance @relation(fields: [attendanceId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  requestedBy User       @relation("CorrectionRequestedBy", fields: [requestedByUserId], references: [id], onDelete: Restrict)
+  reviewedBy  User?      @relation("CorrectionReviewedBy", fields: [reviewedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([attendanceId])
+  @@index([organizationId, status])
+}
+
+// ─────────────────────────────────────────────────────────
+// Payroll — computed wage liability for an employee over a period
+// ─────────────────────────────────────────────────────────
+
+model Payroll {
+  id                String        @id @default(uuid()) @db.Uuid
+  employeeId        String        @db.Uuid
+  storeId           String        @db.Uuid
+  organizationId    String        @db.Uuid
+  periodStart       DateTime      @db.Date
+  periodEnd         DateTime      @db.Date
+  totalDaysPresent  Int
+  totalWage         Decimal       @db.Decimal(10, 2)
+  status            PayrollStatus @default(DRAFT)
+  generatedAt       DateTime      @default(now())
+  finalizedAt       DateTime?
+  finalizedByUserId String?       @db.Uuid
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  // DRAFT: provisional, may be recalculated (update this row in place).
+  // FINALIZED: immutable historical record — the application layer must
+  // refuse further mutation once finalizedAt/finalizedByUserId are set.
+  employee    Employee @relation(fields: [employeeId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  store       Store    @relation(fields: [storeId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  finalizedBy User?    @relation(fields: [finalizedByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([employeeId, periodStart, periodEnd])
+  @@index([storeId, periodStart])
+}
+
+// ─────────────────────────────────────────────────────────
+// PaymentLedger — actual money paid to an employee
+// ─────────────────────────────────────────────────────────
+
+model PaymentLedger {
+  id               String   @id @default(uuid()) @db.Uuid
+  employeeId       String   @db.Uuid
+  organizationId   String   @db.Uuid
+  amount           Decimal  @db.Decimal(10, 2)
+  paidAt           DateTime
+  note             String?
+  recordedByUserId String   @db.Uuid
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  // Outstanding balance is computed at query time as
+  // SUM(Payroll.totalWage) - SUM(PaymentLedger.amount); never stored here.
+  employee   Employee @relation(fields: [employeeId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  recordedBy User     @relation(fields: [recordedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([employeeId])
+}
