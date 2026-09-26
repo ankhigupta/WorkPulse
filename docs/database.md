@@ -1,6 +1,6 @@
 # Database Design
 
-Status: schema defined in `backend/prisma/schema.prisma`, no migrations run yet.
+Status: schema defined in `backend/prisma/schema.prisma`. Two migrations applied: `20260926000544_init_workpulse_schema` (all 10 core tables) and `20260926224136_add_refresh_token` (adds `RefreshToken`, see below).
 
 ## Entity overview
 
@@ -16,6 +16,7 @@ Status: schema defined in `backend/prisma/schema.prisma`, no migrations run yet.
 | AttendanceCorrection | Requested change to an Attendance row | permanent audit record, never overwrites Attendance directly |
 | Payroll | Computed wage liability for a period | `DRAFT` → `FINALIZED` lifecycle |
 | PaymentLedger | Actual money paid to an employee | balance computed at query time, never stored |
+| RefreshToken | Opaque refresh token for session renewal | stores a SHA-256 hash, not the raw token; belongs to a User |
 
 Roles: `SUPER_ADMIN`, `ORGANIZATION_ADMIN`, `STORE_MANAGER`, `EMPLOYEE` (`Role` enum on `User`).
 

@@ -78,6 +78,7 @@ model User {
   authoredNotes     EmployeeNote[]
   recordedPayments  PaymentLedger[]
   finalizedPayrolls Payroll[]
+  refreshTokens     RefreshToken[]
 
   requestedCorrections AttendanceCorrection[] @relation("CorrectionRequestedBy")
   reviewedCorrections  AttendanceCorrection[] @relation("CorrectionReviewedBy")
@@ -312,4 +313,24 @@ model PaymentLedger {
   recordedBy User     @relation(fields: [recordedByUserId], references: [id], onDelete: Restrict)
 
   @@index([employeeId])
+}
+
+// ─────────────────────────────────────────────────────────
+// RefreshToken — opaque, hashed refresh token for session renewal
+// ─────────────────────────────────────────────────────────
+
+model RefreshToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  // SHA-256 hash of the raw token — not bcrypt. Bcrypt is one-way and
+  // salted per-call, so it can't be looked up by value; this needs an
+  // exact-match DB lookup on every refresh request.
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId])
 }
