@@ -4,4 +4,5 @@ export {
   ForbiddenError,
   NotFoundError,
   ValidationError,
+  ConflictError,
 } from "./AppError";

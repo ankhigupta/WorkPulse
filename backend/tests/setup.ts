@@ -11,10 +11,11 @@ if (process.env.NODE_ENV !== "test" || !process.env.DATABASE_URL?.includes("work
 }
 
 // Deterministic clean slate before every test. Deletion order respects the
-// RESTRICT foreign keys: RefreshToken -> User -> Organization.
+// RESTRICT foreign keys: RefreshToken/Employee/Manager -> Store/User -> Organization.
 beforeEach(async () => {
   await prisma.refreshToken.deleteMany({});
   await prisma.employee.deleteMany({});
+  await prisma.manager.deleteMany({});
   await prisma.store.deleteMany({});
   await prisma.user.deleteMany({});
   await prisma.organization.deleteMany({});
