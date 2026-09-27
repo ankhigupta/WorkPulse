@@ -3,3 +3,5 @@ dist/
 .env
 backend/.env
 backend/src/generated/
+backend/coverage/
+backend/.env.test
