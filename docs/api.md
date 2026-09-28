@@ -1,6 +1,10 @@
 # API Reference
 
-This file is being filled in incrementally, module by module, rather than all at once — each milestone documents only what it built, to avoid blocking implementation on retroactively writing up every prior module. It currently documents the Dashboard and Reports endpoints.
+This file is being filled in incrementally, module by module, rather than all at once — each milestone documents only what it built, to avoid blocking implementation on retroactively writing up every prior module. It currently documents the Employees (partial — the optional-login-account behavior only), Dashboard, and Reports endpoints.
+
+## Employees — optional login accounts
+
+`POST /api/employees` (`ORGANIZATION_ADMIN` only) requires `name`, `storeId`, `dailyWage`, `joinedAt`. `email`/`password` are **optional** and must be supplied together or not at all — see `docs/database.md`'s "Employee ≠ User" section for why. When omitted, the created `Employee` has `user: null` in every response and no `User` row is ever created for it. That employee still works normally everywhere else: `POST /api/attendance` (recorded by their `STORE_MANAGER`), `POST /api/payroll`, `POST /api/payments`, and every report all operate purely on `employeeId` — none of them touch or require `Employee.user`.
 
 ## Dashboard
 
@@ -49,7 +53,7 @@ No `{success, data}` envelope — matches every other endpoint in this API, whic
 
 Four read-only report endpoints, all under `/api/reports/*`. Same role/scope model as Dashboard: `ORGANIZATION_ADMIN`, `STORE_MANAGER` (own store only, resolved server-side, never client-supplied). `EMPLOYEE`/`SUPER_ADMIN` get `403`. No `{success, data}` envelope, matching every other endpoint.
 
-**A schema note that applies to all four:** there is no name field anywhere in the schema — `Employee` and `User` only have `email`. Every `employeeName` field below is the linked `User.email`, not a real name. This is a known, deliberate gap (confirmed with the user rather than silently worked around) — a future milestone would need to add a name field to `User` for this to show anything more meaningful.
+**A schema note that applies to all four:** every `employeeName` field below is the real `Employee.name` field — independent of whether that employee has a login account at all. (This replaces an earlier, temporary version of these reports that used `User.email` as a placeholder before `Employee.name` existed.)
 
 ### `GET /api/reports/attendance`
 
