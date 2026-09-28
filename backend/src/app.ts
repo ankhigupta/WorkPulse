@@ -10,6 +10,7 @@ import managerRoutes from "./modules/managers/manager.routes";
 import organizationRoutes from "./modules/organizations/organization.routes";
 import paymentRoutes from "./modules/payments/payment.routes";
 import payrollRoutes from "./modules/payroll/payroll.routes";
+import reportsRoutes from "./modules/reports/reports.routes";
 import storeRoutes from "./modules/stores/store.routes";
 
 const app = express();
@@ -36,6 +37,7 @@ app.use("/api/employee-notes", employeeNoteRoutes);
 app.use("/api/payroll", payrollRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/reports", reportsRoutes);
 
 // Must be last: catches errors thrown/forwarded by every route above.
 app.use(errorHandler);
