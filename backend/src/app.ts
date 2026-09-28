@@ -3,6 +3,7 @@ import { errorHandler } from "./common/middleware/errorHandler";
 import attendanceRoutes from "./modules/attendance/attendance.routes";
 import attendanceCorrectionRoutes from "./modules/attendanceCorrections/attendanceCorrection.routes";
 import authRoutes from "./modules/auth/auth.routes";
+import dashboardRoutes from "./modules/dashboard/dashboard.routes";
 import employeeRoutes from "./modules/employees/employee.routes";
 import employeeNoteRoutes from "./modules/employeeNotes/employeeNote.routes";
 import managerRoutes from "./modules/managers/manager.routes";
@@ -34,6 +35,7 @@ app.use("/api/attendance-corrections", attendanceCorrectionRoutes);
 app.use("/api/employee-notes", employeeNoteRoutes);
 app.use("/api/payroll", payrollRoutes);
 app.use("/api/payments", paymentRoutes);
+app.use("/api/dashboard", dashboardRoutes);
 
 // Must be last: catches errors thrown/forwarded by every route above.
 app.use(errorHandler);
