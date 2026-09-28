@@ -21,6 +21,7 @@ async function createOrgAdmin(organizationId: string) {
 }
 
 const validEmployeePayload = (storeId: string, overrides: Record<string, unknown> = {}) => ({
+  name: "Rohan Mehta",
   email: `employee-${crypto.randomUUID()}@example.com`,
   password: "Test1234!",
   storeId,
@@ -44,6 +45,7 @@ describe("POST /api/employees", () => {
     expect(res.body).toMatchObject({
       organizationId: org.id,
       storeId: store.id,
+      name: "Rohan Mehta",
       dailyWage: "500",
       isActive: true,
     });
@@ -145,6 +147,66 @@ describe("POST /api/employees", () => {
     expect(res.status).toBe(422);
   });
 
+  it("rejects a missing name even when email/password are provided", async () => {
+    const org = await createTestOrganization();
+    const store = await createTestStore(org.id);
+    const token = await createOrgAdmin(org.id);
+
+    const res = await request(app)
+      .post("/api/employees")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        email: `employee-${crypto.randomUUID()}@example.com`,
+        password: "Test1234!",
+        storeId: store.id,
+        dailyWage: 500,
+        joinedAt: "2026-01-15",
+      });
+
+    expect(res.status).toBe(422);
+  });
+
+  it("organization admin can create an employee with no email/password/login account at all", async () => {
+    const org = await createTestOrganization();
+    const store = await createTestStore(org.id);
+    const token = await createOrgAdmin(org.id);
+
+    const res = await request(app)
+      .post("/api/employees")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ name: "Rohan Mehta", storeId: store.id, dailyWage: 700, joinedAt: "2026-01-15" });
+
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({ name: "Rohan Mehta", organizationId: org.id, storeId: store.id });
+    expect(res.body.user).toBeNull();
+  });
+
+  it("rejects email supplied without a password", async () => {
+    const org = await createTestOrganization();
+    const store = await createTestStore(org.id);
+    const token = await createOrgAdmin(org.id);
+
+    const res = await request(app)
+      .post("/api/employees")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ name: "Rohan Mehta", email: "rohan@example.com", storeId: store.id, dailyWage: 700, joinedAt: "2026-01-15" });
+
+    expect(res.status).toBe(422);
+  });
+
+  it("rejects password supplied without an email", async () => {
+    const org = await createTestOrganization();
+    const store = await createTestStore(org.id);
+    const token = await createOrgAdmin(org.id);
+
+    const res = await request(app)
+      .post("/api/employees")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ name: "Rohan Mehta", password: "Test1234!", storeId: store.id, dailyWage: 700, joinedAt: "2026-01-15" });
+
+    expect(res.status).toBe(422);
+  });
+
   it("rejects a negative dailyWage", async () => {
     const org = await createTestOrganization();
     const store = await createTestStore(org.id);
@@ -209,6 +271,24 @@ describe("GET /api/employees", () => {
     expect(res.body).toHaveLength(2);
     expect(res.body.every((e: { storeId: string }) => e.storeId === storeA.id)).toBe(true);
   });
+
+  it("includes employees with no login account, correctly showing user: null", async () => {
+    const org = await createTestOrganization();
+    const store = await createTestStore(org.id);
+    const token = await createOrgAdmin(org.id);
+
+    await request(app)
+      .post("/api/employees")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ name: "Rohan Mehta", storeId: store.id, dailyWage: 700, joinedAt: "2026-01-15" });
+
+    const res = await request(app).get("/api/employees").set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(1);
+    expect(res.body[0]).toMatchObject({ name: "Rohan Mehta" });
+    expect(res.body[0].user).toBeNull();
+  });
 });
 
 describe("GET /api/employees/:employeeId", () => {
@@ -227,6 +307,24 @@ describe("GET /api/employees/:employeeId", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.id).toBe(createRes.body.id);
+  });
+
+  it("retrieves an employee with no login account, correctly showing user: null", async () => {
+    const org = await createTestOrganization();
+    const store = await createTestStore(org.id);
+    const token = await createOrgAdmin(org.id);
+    const createRes = await request(app)
+      .post("/api/employees")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ name: "Rohan Mehta", storeId: store.id, dailyWage: 700, joinedAt: "2026-01-15" });
+
+    const res = await request(app)
+      .get(`/api/employees/${createRes.body.id}`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.name).toBe("Rohan Mehta");
+    expect(res.body.user).toBeNull();
   });
 
   it("organization admin cannot access another organization's employee (404)", async () => {

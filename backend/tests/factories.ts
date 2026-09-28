@@ -76,6 +76,7 @@ export async function createTestManager(options: CreateTestManagerOptions) {
 interface CreateTestEmployeeOptions {
   organizationId: string;
   storeId: string;
+  name?: string;
   email?: string;
   dailyWage?: number;
   isActive?: boolean;
@@ -83,7 +84,9 @@ interface CreateTestEmployeeOptions {
 
 // Creates the User + Employee pair directly, bypassing the
 // Employee-creation API — used when a test needs an employee to exist as
-// a fixture, not as the thing under test.
+// a fixture, not as the thing under test. Always creates a linked User
+// (matching every existing call site's assumption) — for an employee with
+// no login account at all, use createTestEmployeeWithoutUser instead.
 export async function createTestEmployee(options: CreateTestEmployeeOptions) {
   const passwordHash = await bcrypt.hash("Test1234!", 12);
 
@@ -102,12 +105,39 @@ export async function createTestEmployee(options: CreateTestEmployeeOptions) {
       userId: user.id,
       organizationId: options.organizationId,
       storeId: options.storeId,
+      name: options.name ?? "Test Employee",
       dailyWage: options.dailyWage ?? 500,
       joinedAt: new Date(),
     },
   });
 
   return { user, employee };
+}
+
+interface CreateTestEmployeeWithoutUserOptions {
+  organizationId: string;
+  storeId: string;
+  name?: string;
+  dailyWage?: number;
+  isActive?: boolean;
+}
+
+// Creates a pure workforce-record Employee with no linked User at all —
+// the case this milestone introduced: an employee with no phone/email who
+// never logs in, whose attendance is always recorded by a STORE_MANAGER.
+export async function createTestEmployeeWithoutUser(options: CreateTestEmployeeWithoutUserOptions) {
+  const employee = await prisma.employee.create({
+    data: {
+      organizationId: options.organizationId,
+      storeId: options.storeId,
+      name: options.name ?? "Test Employee (No Account)",
+      dailyWage: options.dailyWage ?? 500,
+      joinedAt: new Date(),
+      isActive: options.isActive ?? true,
+    },
+  });
+
+  return { employee };
 }
 
 interface CreateTestAttendanceOptions {

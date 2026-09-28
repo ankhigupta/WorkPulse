@@ -80,7 +80,7 @@ describe("GET /api/reports/attendance", () => {
   });
 
   it("STORE_MANAGER sees only their own store's attendance", async () => {
-    const { org, store, employee, employeeUser, admin } = await setupScenario();
+    const { org, store, employee, admin } = await setupScenario();
     const storeB = await createTestStore(org.id, "Store B");
     const { employee: empB } = await createTestEmployee({ organizationId: org.id, storeId: storeB.id });
     await createTestAttendance({ employeeId: employee.id, storeId: store.id, organizationId: org.id, markedByUserId: admin.userId, date: new Date("2026-01-15"), status: "PRESENT" });
@@ -93,7 +93,7 @@ describe("GET /api/reports/attendance", () => {
 
     expect(res.body.employees).toHaveLength(1);
     expect(res.body.employees[0].employeeId).toBe(employee.id);
-    expect(res.body.employees[0].employeeName).toBe(employeeUser.email);
+    expect(res.body.employees[0].employeeName).toBe(employee.name);
   });
 
   it("cross-store data is excluded even when a storeId filter for another store is supplied", async () => {
@@ -437,7 +437,7 @@ describe("GET /api/reports/payments", () => {
 
 describe("GET /api/reports/workforce", () => {
   it("ORG_ADMIN sees organization-wide workforce", async () => {
-    const { org, store, employeeUser } = await setupScenario();
+    const { org, store, employee } = await setupScenario();
     const { employee: e2 } = await createTestEmployee({ organizationId: org.id, storeId: store.id });
     void e2;
     const admin = await createOrgAdmin(org.id);
@@ -446,7 +446,7 @@ describe("GET /api/reports/workforce", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.summary.totalEmployees).toBe(2);
-    expect(res.body.employees.some((e: { employeeName: string }) => e.employeeName === employeeUser.email)).toBe(true);
+    expect(res.body.employees.some((e: { employeeName: string }) => e.employeeName === employee.name)).toBe(true);
   });
 
   it("STORE_MANAGER sees only their own store's workforce", async () => {

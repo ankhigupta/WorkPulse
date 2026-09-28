@@ -123,9 +123,18 @@ model Store {
 
 model Employee {
   id             String   @id @default(uuid()) @db.Uuid
-  userId         String   @unique @db.Uuid
+  // Workforce identity, not a login identity — see User below. Nullable:
+  // an Employee is not required to ever have a WorkPulse account. When
+  // userId IS set, Postgres's standard composite-FK behavior (MATCH
+  // SIMPLE) still enforces that organizationId matches that User's own
+  // org; when userId is null, the FK simply isn't checked for that row —
+  // verified against the installed Prisma 7.9.1 engine before relying on it.
+  userId         String?  @unique @db.Uuid
   organizationId String   @db.Uuid
   storeId        String   @db.Uuid
+  // Meaningful human-readable name — required, independent of any login
+  // account. Never derived from User.email.
+  name           String
   dailyWage      Decimal  @db.Decimal(10, 2)
   qrCodeToken    String   @unique @default(uuid())
   joinedAt       DateTime @db.Date
@@ -134,8 +143,9 @@ model Employee {
   updatedAt      DateTime @updatedAt
 
   // Composite FKs: organizationId must match both the linked User's org
-  // and the linked Store's org — enforced by Postgres, not just app code.
-  user  User  @relation(fields: [userId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  // (when a User is linked at all) and the linked Store's org — enforced
+  // by Postgres, not just app code.
+  user  User? @relation(fields: [userId, organizationId], references: [id, organizationId], onDelete: Restrict)
   store Store @relation(fields: [storeId, organizationId], references: [id, organizationId], onDelete: Restrict)
 
   notes       EmployeeNote[]

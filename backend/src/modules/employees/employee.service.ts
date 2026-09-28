@@ -9,12 +9,15 @@ const employeeSelect = {
   id: true,
   organizationId: true,
   storeId: true,
+  name: true,
   dailyWage: true,
   qrCodeToken: true,
   joinedAt: true,
   isActive: true,
   createdAt: true,
   updatedAt: true,
+  // Nullable relation — Prisma returns `user: null` for an employee with
+  // no linked login account, rather than omitting the key.
   user: { select: { id: true, email: true, role: true, isActive: true } },
 } as const;
 
@@ -45,34 +48,56 @@ export async function resolveManagerStoreId(userId: string): Promise<string> {
 }
 
 interface CreateEmployeeInput {
-  email: string;
-  password: string;
+  name: string;
   storeId: string;
   dailyWage: number;
   joinedAt: Date;
+  email?: string;
+  password?: string;
 }
 
+// An Employee is a workforce record, not necessarily a login account —
+// some employees have no phone/email and never log in; their attendance
+// is recorded by a STORE_MANAGER instead. email/password are optional and
+// only provision a login account when both are supplied (validated
+// together at the schema level); when omitted, Employee.userId stays
+// null and no User row is created at all.
 export async function createEmployee(organizationId: string, data: CreateEmployeeInput) {
   await assertStoreBelongsToOrganization(data.storeId, organizationId);
 
-  const passwordHash = await bcrypt.hash(data.password, 12);
-
   try {
-    return await prisma.$transaction(async (tx) => {
-      const user = await tx.user.create({
-        data: { email: data.email, passwordHash, role: Role.EMPLOYEE, organizationId },
-      });
+    if (data.email && data.password) {
+      const passwordHash = await bcrypt.hash(data.password, 12);
+      const email = data.email;
 
-      return tx.employee.create({
-        data: {
-          userId: user.id,
-          organizationId,
-          storeId: data.storeId,
-          dailyWage: data.dailyWage,
-          joinedAt: data.joinedAt,
-        },
-        select: employeeSelect,
+      return await prisma.$transaction(async (tx) => {
+        const user = await tx.user.create({
+          data: { email, passwordHash, role: Role.EMPLOYEE, organizationId },
+        });
+
+        return tx.employee.create({
+          data: {
+            userId: user.id,
+            organizationId,
+            storeId: data.storeId,
+            name: data.name,
+            dailyWage: data.dailyWage,
+            joinedAt: data.joinedAt,
+          },
+          select: employeeSelect,
+        });
       });
+    }
+
+    return await prisma.employee.create({
+      data: {
+        organizationId,
+        storeId: data.storeId,
+        name: data.name,
+        dailyWage: data.dailyWage,
+        joinedAt: data.joinedAt,
+      },
+      select: employeeSelect,
     });
   } catch (error) {
     if (isUniqueConstraintViolation(error)) {
@@ -115,6 +140,7 @@ export async function getEmployeeForAuth(auth: AuthContext, employeeId: string) 
 }
 
 interface UpdateEmployeeInput {
+  name?: string;
   storeId?: string;
   dailyWage?: number;
   joinedAt?: Date;

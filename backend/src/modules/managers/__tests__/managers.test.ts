@@ -126,7 +126,7 @@ describe("POST /api/managers", () => {
     await request(app)
       .post("/api/employees")
       .set("Authorization", `Bearer ${token}`)
-      .send({ email: sharedEmail, password: "Test1234!", storeId: store.id, dailyWage: 400, joinedAt: "2026-01-01" });
+      .send({ name: "Shared Email Employee", email: sharedEmail, password: "Test1234!", storeId: store.id, dailyWage: 400, joinedAt: "2026-01-01" });
 
     const res = await request(app)
       .post("/api/managers")

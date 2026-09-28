@@ -51,6 +51,7 @@ describe("tenant isolation — database-level composite FK enforcement", () => {
           userId: user.id,
           organizationId: orgB.id, // mismatched: the store belongs to Org A
           storeId: storeInOrgA.id,
+          name: "Test Employee",
           dailyWage: 100,
           joinedAt: new Date(),
         },
@@ -70,6 +71,7 @@ describe("tenant isolation — database-level composite FK enforcement", () => {
           userId: user.id, // this user belongs to Org A
           organizationId: orgB.id, // matches the store, but not the user
           storeId: storeInOrgB.id,
+          name: "Test Employee",
           dailyWage: 100,
           joinedAt: new Date(),
         },
@@ -88,6 +90,7 @@ describe("tenant isolation — database-level composite FK enforcement", () => {
           userId: user.id,
           organizationId: org.id,
           storeId: store.id,
+          name: "Test Employee",
           dailyWage: 100,
           joinedAt: new Date(),
         },

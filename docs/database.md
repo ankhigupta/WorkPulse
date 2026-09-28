@@ -1,6 +1,6 @@
 # Database Design
 
-Status: schema defined in `backend/prisma/schema.prisma`. Two migrations applied: `20260926000544_init_workpulse_schema` (all 10 core tables) and `20260926224136_add_refresh_token` (adds `RefreshToken`, see below).
+Status: schema defined in `backend/prisma/schema.prisma`. See `backend/prisma/migrations/` for the full, ordered migration history. Most recent: `employee_optional_user_and_name` (see "Employee ≠ User" below).
 
 ## Entity overview
 
@@ -9,7 +9,7 @@ Status: schema defined in `backend/prisma/schema.prisma`. Two migrations applied
 | Organization | Tenant root | never physically deleted, `isActive` lifecycle |
 | User | Login/account identity for all 4 roles | `email` globally unique, `organizationId` nullable (SUPER_ADMIN only) |
 | Store | Physical location under an Organization | `(organizationId, name)` unique |
-| Employee | Wage-earning workforce record | 1:1 with User, belongs to Store, has `dailyWage`/`qrCodeToken` |
+| Employee | Wage-earning workforce record | belongs to Store, has `name`/`dailyWage`/`qrCodeToken`; **User link is optional** — see below |
 | Manager | Operational workforce record | 1:1 with User, belongs to Store, **no wage/payroll fields** |
 | EmployeeNote | Free-text note about an employee | append-only, no `isActive`, no `organizationId` (derived via Employee) |
 | Attendance | Daily attendance fact | one row per employee per calendar day, immutable once created |
@@ -29,7 +29,7 @@ Organization
     |
     +--(1:N)-- Store
                  |
-                 +--(1:N)-- Employee --(1:1)-- User
+                 +--(1:N)-- Employee --(0..1:1)-- User  [optional — see "Employee ≠ User"]
                  |             |
                  |             +--(1:N)-- EmployeeNote --(author, N:1)--> User
                  |             +--(1:N)-- Attendance --(N:1)--> Store
@@ -68,12 +68,26 @@ The one genuine snapshot in the schema: `Attendance.storeId` is stored independe
 ## Important constraints
 
 - `User.email` — globally unique.
-- `Employee.userId`, `Manager.userId` — unique (1:1 with User).
+- `Employee.userId` — unique **and nullable**. Postgres unique indexes permit any number of `NULL`s, so many account-less employees can coexist, while an employee that *does* have an account still can't share it with another employee.
+- `Manager.userId` — unique, required (1:1 with User — managers always log in to operate the app).
 - `Employee.qrCodeToken` — unique, opaque (`uuid()` default), not derived from the employee's own id.
 - `Store(organizationId, name)` — unique per organization, not globally.
 - `Attendance(employeeId, date)` — unique; the constraint that makes payroll math trustworthy (one attendance record per employee per calendar day).
 - `Payroll(employeeId, periodStart, periodEnd)` — unique; prevents duplicate generation for the same period.
 - `@@unique([id, organizationId])` on `User`, `Store`, `Employee`, `Attendance` — composite-FK targets only, not standalone business constraints.
+
+## Employee ≠ User
+
+An `Employee` is a **workforce identity** — a person who works at a store, has a wage, and appears in attendance/payroll/payments. A `User` is a **login identity** — email, password hash, role, and everything needed to authenticate into WorkPulse. These are separate concepts, and `Employee.userId` is optional precisely because not every real employee has (or needs) a login:
+
+- Some employees have no phone, no email, and no smartphone, and will never log into WorkPulse themselves.
+- Their `STORE_MANAGER` records their attendance manually (`POST /api/attendance`) exactly as for any other employee — attendance, payroll, and payments never require `Employee.user` to exist.
+- `ORGANIZATION_ADMIN` creates the `Employee` record (`name`, store, wage) and *optionally* provisions a login account in the same request by also supplying `email`+`password` — both together, or neither.
+- `Employee.name` is the employee's real, human-readable identity, independent of any account. It is never derived from `User.email`.
+
+The composite foreign key `Employee(userId, organizationId) → User(id, organizationId)` still applies whenever `userId` is set — Postgres's standard composite-FK behavior (`MATCH SIMPLE`) means the constraint is simply not evaluated for a row where `userId` is `NULL`, so there's no special-case logic needed anywhere for this to work correctly.
+
+**Migration note**: the `name` column was added as a required field after employees already existed in principle (via `Employee.userId` being mandatory until this change). The migration (`employee_optional_user_and_name`) backfills `name` from each existing employee's linked `User.email` as a one-time, temporary value — this is a migration convenience, not a real name, and does not apply to any employee created after this migration. There were zero existing `Employee` rows in this database when the migration ran, so this path was verified structurally but not exercised against real data.
 
 ## Payroll lifecycle
 
@@ -82,6 +96,6 @@ The one genuine snapshot in the schema: `Attendance.storeId` is stored independe
 - **DRAFT** — provisional. If an attendance correction is approved for a date inside a DRAFT period, the existing Payroll row is recalculated and updated in place (same id, same unique tuple) rather than replaced.
 - **FINALIZED** — sets `finalizedAt` + `finalizedByUserId`, then treated as immutable historical fact. The application layer must refuse further mutation; a correction landing inside a finalized period is blocked/flagged for manual reconciliation rather than triggering an automatic recompute. No adjustment-ledger table — kept intentionally minimal for V1.
 
-## Not yet implemented
+## Status
 
-No migration has been run. No tables exist in Postgres yet. Payroll/attendance services, repositories, and application-level enforcement of the FINALIZED-immutability rule are future milestones.
+All entities in this document are implemented, migrated, and have a full service/route layer. See `docs/api.md` for the (incrementally documented) API surface.

@@ -22,10 +22,9 @@ function computeRate(present: number, total: number): number {
   return total === 0 ? 0 : Math.round((present / total) * 10000) / 100;
 }
 
-// No name field exists anywhere in the schema (Employee/User only have
-// email) — confirmed against schema.prisma before writing this, and
-// confirmed with the user rather than guessed. Every "employeeName" field
-// in these reports is the linked User's email.
+// Every "employeeName" field is Employee.name — a real, independent
+// workforce identity. It has no relationship to whether the employee has
+// a login account at all; an employee with no User still has a name.
 
 // ── Report 1: Attendance ──────────────────────────────────────────
 
@@ -65,9 +64,9 @@ export async function getAttendanceReport(auth: AuthContext, filters: Attendance
         where: { id: { in: employeeIds } },
         select: {
           id: true,
+          name: true,
           storeId: true,
           store: { select: { name: true } },
-          user: { select: { email: true } },
         },
       })
     : [];
@@ -91,7 +90,7 @@ export async function getAttendanceReport(auth: AuthContext, filters: Attendance
     const total = counts.present + counts.absent;
     return {
       employeeId,
-      employeeName: employee?.user.email ?? "",
+      employeeName: employee?.name ?? "",
       storeId: employee?.storeId ?? "",
       storeName: employee?.store.name ?? "",
       present: counts.present,
@@ -175,7 +174,7 @@ export async function getPayrollReport(auth: AuthContext, filters: PayrollReport
         totalWage: true,
         status: true,
         store: { select: { name: true } },
-        employee: { select: { user: { select: { email: true } } } },
+        employee: { select: { name: true } },
       },
       orderBy: [{ periodStart: "desc" }, { createdAt: "desc" }],
     }),
@@ -191,7 +190,7 @@ export async function getPayrollReport(auth: AuthContext, filters: PayrollReport
     payroll: records.map((record) => ({
       payrollId: record.id,
       employeeId: record.employeeId,
-      employeeName: record.employee.user.email,
+      employeeName: record.employee.name,
       storeId: record.storeId,
       storeName: record.store.name,
       periodStart: formatDateOnly(record.periodStart),
@@ -243,7 +242,7 @@ export async function getPaymentsReport(auth: AuthContext, filters: PaymentsRepo
         paidAt: true,
         note: true,
         employee: {
-          select: { storeId: true, store: { select: { name: true } }, user: { select: { email: true } } },
+          select: { name: true, storeId: true, store: { select: { name: true } } },
         },
       },
       orderBy: { paidAt: "desc" },
@@ -259,7 +258,7 @@ export async function getPaymentsReport(auth: AuthContext, filters: PaymentsRepo
     payments: records.map((record) => ({
       paymentId: record.id,
       employeeId: record.employeeId,
-      employeeName: record.employee.user.email,
+      employeeName: record.employee.name,
       storeId: record.employee.storeId,
       storeName: record.employee.store.name,
       amount: record.amount.toFixed(2),
@@ -292,12 +291,12 @@ export async function getWorkforceReport(auth: AuthContext, filters: WorkforceRe
       // fetched-then-stripped.
       select: {
         id: true,
+        name: true,
         storeId: true,
         dailyWage: true,
         joinedAt: true,
         isActive: true,
         store: { select: { name: true } },
-        user: { select: { email: true } },
       },
       orderBy: { joinedAt: "asc" },
     }),
@@ -311,7 +310,7 @@ export async function getWorkforceReport(auth: AuthContext, filters: WorkforceRe
     },
     employees: records.map((record) => ({
       employeeId: record.id,
-      employeeName: record.user.email,
+      employeeName: record.name,
       storeId: record.storeId,
       storeName: record.store.name,
       dailyWage: record.dailyWage.toFixed(2),
