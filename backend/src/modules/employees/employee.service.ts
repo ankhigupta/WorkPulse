@@ -36,7 +36,7 @@ async function assertStoreBelongsToOrganization(storeId: string, organizationId:
 // STORE_MANAGER's store assignment isn't a JWT claim (only organizationId
 // and role are) — it's looked up fresh from the Manager row on every
 // request, same staleness trade-off already made for User.isActive in /me.
-async function resolveManagerStoreId(userId: string): Promise<string> {
+export async function resolveManagerStoreId(userId: string): Promise<string> {
   const manager = await prisma.manager.findUnique({ where: { userId } });
   if (!manager) {
     throw new ForbiddenError("No store assignment found for this manager account");

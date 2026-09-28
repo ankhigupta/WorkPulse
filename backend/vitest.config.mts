@@ -19,5 +19,13 @@ export default defineConfig({
     // cross-file data races without needing per-test DB transactions.
     fileParallelism: false,
     globals: false,
+    // The suite has grown into real bcrypt hashing (cost 12) + real
+    // Postgres round-trips across 200+ tests, run serially. Vitest's
+    // 5000ms default per-test timeout is occasionally too tight under
+    // load even though nothing is actually broken — a single test stalls
+    // past it once in a while, always passes cleanly in isolation or a
+    // smaller batch. Raised, not removed: a genuinely hung test should
+    // still fail loudly.
+    testTimeout: 20000,
   },
 });

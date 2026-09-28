@@ -72,3 +72,67 @@ export async function createTestManager(options: CreateTestManagerOptions) {
 
   return { user, manager, password };
 }
+
+interface CreateTestEmployeeOptions {
+  organizationId: string;
+  storeId: string;
+  email?: string;
+  dailyWage?: number;
+  isActive?: boolean;
+}
+
+// Creates the User + Employee pair directly, bypassing the
+// Employee-creation API — used when a test needs an employee to exist as
+// a fixture, not as the thing under test.
+export async function createTestEmployee(options: CreateTestEmployeeOptions) {
+  const passwordHash = await bcrypt.hash("Test1234!", 12);
+
+  const user = await prisma.user.create({
+    data: {
+      email: options.email ?? `employee-${crypto.randomUUID()}@example.com`,
+      passwordHash,
+      role: Role.EMPLOYEE,
+      organizationId: options.organizationId,
+      isActive: options.isActive ?? true,
+    },
+  });
+
+  const employee = await prisma.employee.create({
+    data: {
+      userId: user.id,
+      organizationId: options.organizationId,
+      storeId: options.storeId,
+      dailyWage: options.dailyWage ?? 500,
+      joinedAt: new Date(),
+    },
+  });
+
+  return { user, employee };
+}
+
+interface CreateTestAttendanceOptions {
+  employeeId: string;
+  storeId: string;
+  organizationId: string;
+  markedByUserId: string;
+  date?: Date;
+  status?: "PRESENT" | "ABSENT";
+  method?: "QR" | "MANUAL";
+}
+
+// Creates an Attendance row directly, bypassing the Attendance-creation
+// API — used when a test needs an existing attendance record as a fixture
+// for the AttendanceCorrection workflow under test.
+export async function createTestAttendance(options: CreateTestAttendanceOptions) {
+  return prisma.attendance.create({
+    data: {
+      employeeId: options.employeeId,
+      storeId: options.storeId,
+      organizationId: options.organizationId,
+      date: options.date ?? new Date("2026-01-15"),
+      status: options.status ?? "PRESENT",
+      method: options.method ?? "MANUAL",
+      markedByUserId: options.markedByUserId,
+    },
+  });
+}
