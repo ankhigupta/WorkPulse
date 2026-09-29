@@ -1,6 +1,6 @@
 # Mobile App
 
-Status: foundation (navigation, theme, auth, API client, Login screen), a real Home/Dashboard screen, and a real Employees module (list/detail/create/edit). See `docs/decisions.md` ADR-006/ADR-007/ADR-008 for the architecture decisions behind it.
+Status: foundation (navigation, theme, auth, API client, Login screen), a real Home/Dashboard screen, a real Employees module (list/detail/create/edit), and a real Attendance module (list + manual create). See `docs/decisions.md` ADR-006 through ADR-009 for the architecture decisions behind it.
 
 ## Stack
 
@@ -14,16 +14,16 @@ Run with Node 22 LTS (`nvm use 22`), not the backend's Node 24 — Expo/Metro co
 mobile/
   App.tsx                 — providers (React Query, Paper, SafeArea, NavigationContainer), font/auth bootstrap, splash hold
   src/
-    api/                   client.ts (axios instance + 401 refresh-and-retry), auth.ts, dashboard.ts, employees.ts, stores.ts
-    components/            AppText, AppButton, AppInput, AppCard, ScreenContainer, SectionHeader, StatusBadge, Avatar, IconButton, Divider, LoadingState, EmptyState, MetricCard, DashboardSection, SummaryRow, EmployeeCard, EmployeeForm
+    api/                   client.ts (axios instance + 401 refresh-and-retry), auth.ts, dashboard.ts, employees.ts, stores.ts, attendance.ts
+    components/            AppText, AppButton, AppInput, AppCard, ScreenContainer, SectionHeader, StatusBadge, Avatar, IconButton, Divider, LoadingState, EmptyState, MetricCard, DashboardSection, SummaryRow, EmployeeCard, EmployeeForm, AttendanceCard, AttendanceDateSelector, AttendanceForm
     constants/config.ts    API_BASE_URL (EXPO_PUBLIC_API_URL, else localhost/10.0.2.2 by platform)
-    hooks/                 useDashboardSummary.ts, useEmployees.ts (list/detail/create/update), useStores.ts
-    navigation/            AuthNavigator (Login), AppNavigator (bottom tabs), EmployeesNavigator (nested stack: list/detail/create/edit), RootNavigator, types.ts
-    screens/               LoginScreen, HomeScreen (real dashboard), employees/ (List/Detail/Create/Edit, all real), Attendance/Payroll/More (placeholders)
+    hooks/                 useDashboardSummary.ts, useEmployees.ts, useStores.ts, useAttendance.ts (list keyed by filters, create)
+    navigation/            AuthNavigator (Login), AppNavigator (bottom tabs), EmployeesNavigator, AttendanceNavigator (both nested stacks), RootNavigator, types.ts
+    screens/               LoginScreen, HomeScreen, employees/ (List/Detail/Create/Edit), attendance/ (List/Create), Payroll/More (placeholders)
     stores/authStore.ts    Zustand — accessToken/user in memory, refresh token in SecureStore only
     theme/                 colors.ts, typography.ts, spacing.ts, index.ts (static `theme` export)
-    types/                 auth.ts, employee.ts, store.ts, api.ts, dashboard.ts
-    utils/                 format.ts (currency/date display, UTC-safe), validation.ts (email pattern, date-only shape check)
+    types/                 auth.ts, employee.ts, store.ts, api.ts, dashboard.ts, attendance.ts
+    utils/                 format.ts (currency/date display, UTC-safe), validation.ts (email pattern, date-only shape check), date.ts (calendar-date arithmetic, UTC-safe)
 ```
 
 ## Theme
@@ -67,6 +67,18 @@ Several elements in the Mobile Employees design reference aren't real backend fi
 
 `joinedAt` from the API is a full ISO datetime (`2026-01-15T00:00:00.000Z`), not a plain date — `Employee.joinedAt` is a raw Prisma `DateTime` column, never reformatted server-side the way Dashboard's `period` dates are. `utils/format.ts`'s `toDateOnlyString()` slices it to `YYYY-MM-DD` before it ever reaches a form field, so editing an employee doesn't leak a raw timestamp into the joined-date input.
 
+## Attendance module
+
+Backed entirely by `GET /api/attendance` and `POST /api/attendance` — no backend changes. Server state lives in TanStack Query, key `["attendance", { date, ... }]` (`hooks/useAttendance.ts`'s `attendanceKey(params)`), so a different selected date is a genuinely different cached query rather than one shared key being overwritten — switching dates shows that date's own loading/cached state correctly. Create invalidates the whole `["attendance"]` prefix, covering every cached date at once.
+
+`Attendance` has no nested employee/store name (`attendanceSelect` on the backend returns only `employeeId`/`storeId`) — names are resolved client-side from the already-loaded `useEmployeeList()`/`useStoreList()` caches (a `Map` built with `useMemo`), not a second per-record fetch. This is the same N+1-avoidance pattern the Employees module already established, applied here because the backend response shape requires it.
+
+`Attendance.date` and `Employee.joinedAt` have the same "full ISO string, not a plain date" quirk (see ADR-005/prior note) — confirmed directly against a backend test assertion (`res.body.date === "2026-01-15T00:00:00.000Z"`), not assumed. `AttendanceCard` and the date selector both go through `toDateOnlyString`/`formatDateOnly`.
+
+**No attendance record is never rendered as Absent.** The list's `ListEmptyComponent` explicitly says no one has been marked present *or* absent yet — `ABSENT` only ever appears for a real `Attendance` row with that status, never as a fallback interpretation of a missing one.
+
+Status is fixed to `PRESENT`/`ABSENT` (`AttendanceStatus` type has no other members) with `StatusBadge` tones `success`/`error` — the `error` tone for absent is a direct reuse of the design system's own "Error / absent" palette entry, not an improvised choice. See ADR-009 for the scope cuts made against the create form specifically (method, checkInAt, QR).
+
 ## What's intentionally not here yet
 
-Attendance (QR or manual), payroll/payment screens, reports, manager management, employee notes, QR display, offline sync, push notifications, employee invitation/account-linking — all separate future milestones. Attendance/Payroll/More tabs are still `EmptyState` placeholders.
+Attendance Corrections, QR attendance capture, payroll/payment screens, reports, manager management, employee notes, QR code display, offline sync, push notifications, employee invitation/account-linking — all separate future milestones. Payroll/More tabs are still `EmptyState` placeholders.

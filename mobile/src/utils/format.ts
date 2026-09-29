@@ -1,3 +1,5 @@
+import { shiftDateOnly } from "./date";
+
 // Some endpoints (Dashboard's period) send a plain "YYYY-MM-DD"; others
 // (Employee.joinedAt — a raw Prisma DateTime, never reformatted server-side)
 // send a full ISO datetime like "2026-01-15T00:00:00.000Z". Both forms
@@ -20,6 +22,25 @@ export function formatDateOnly(value: string): string {
   return new Intl.DateTimeFormat("en-US", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(
     parseDateOnly(value),
   );
+}
+
+// A short heading for a selected calendar date — "Today"/"Yesterday" read
+// naturally in a date-navigation header; anything else falls back to a
+// plain UTC-safe date. `todayValue` is passed in (from utils/date.ts)
+// rather than computed here, so this stays a pure function of its inputs.
+export function formatDateHeading(value: string, todayValue: string): string {
+  if (value === todayValue) return "Today";
+  if (value === shiftDateOnly(todayValue, -1)) return "Yesterday";
+  return new Intl.DateTimeFormat("en-US", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" }).format(
+    parseDateOnly(value),
+  );
+}
+
+// checkInAt is a genuine instant (unlike date-only fields), so it's shown
+// in the viewer's own local time — that's the correct behavior here, not
+// a bug: a 9:03am check-in should read as 9:03am wherever the viewer is.
+export function formatTime(isoInstant: string): string {
+  return new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" }).format(new Date(isoInstant));
 }
 
 export function formatPeriodLabel(startDate: string, endDate: string): string {

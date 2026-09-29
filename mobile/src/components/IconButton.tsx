@@ -7,20 +7,24 @@ interface IconButtonProps {
   onPress: () => void;
   accessibilityLabel: string;
   variant?: "default" | "primary";
+  disabled?: boolean;
 }
 
 // Icon-only buttons must carry their own accessibilityLabel — there's no
 // visible text for a screen reader to fall back on.
-export function IconButton({ icon, onPress, accessibilityLabel, variant = "default" }: IconButtonProps) {
+export function IconButton({ icon, onPress, accessibilityLabel, variant = "default", disabled = false }: IconButtonProps) {
   return (
     <Pressable
       onPress={onPress}
+      disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
+      accessibilityState={{ disabled }}
       style={({ pressed }) => [
         styles.base,
         variant === "primary" && styles.primary,
-        pressed && styles.pressed,
+        disabled && styles.disabled,
+        pressed && !disabled && styles.pressed,
       ]}
     >
       <Ionicons
@@ -46,5 +50,8 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.7,
+  },
+  disabled: {
+    opacity: 0.35,
   },
 });

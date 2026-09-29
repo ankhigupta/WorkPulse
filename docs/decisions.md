@@ -202,3 +202,32 @@ Same principle as ADR-007: a screen that fabricates data it doesn't have is wors
 ### Trade-offs
 
 - A `STORE_MANAGER` sees "Your store" instead of an actual store name anywhere in the Employees module, since no endpoint gives them that name. This is a minor, honest UX gap, not a bug — the alternative (guessing or caching a name from some other screen) risks showing a stale or wrong store name with no way to know.
+
+---
+
+## ADR-009: Mobile Attendance — Manual-Only Create, No Method/Check-In UI, No Detail or Edit Screen
+
+**Status:** Accepted
+
+### Decision
+
+The mobile Attendance create form asks for only three things: employee, date, and status (Present/Absent). Three things a fuller form could have included are deliberately left out:
+
+1. **No method picker.** Every record this app creates is submitted with `method: "MANUAL"`, silently, with no UI control for it. QR capture (`method: "QR"`) has no scanner in this milestone — offering a picker with a QR option that does nothing when selected would be exactly the "fake QR workflow" the milestone ticket explicitly forbade.
+2. **No `checkInAt` input.** The field is optional on the backend and nothing in the approved design references calls for a check-in-time entry in a manual attendance flow. Adding it would mean either accepting a bare time (ambiguous — today? the selected date? the device's timezone or the server's?) or building real date+time picker UI for a field with no demonstrated product need yet. The milestone ticket explicitly permitted omitting it under exactly this reasoning.
+3. **No attendance detail screen, no edit screen.** `attendanceSelect` on the backend is a small, flat object (id, employeeId, storeId, date, status, method, checkInAt, markedByUserId, timestamps) — everything in it is already visible on the list card. A detail screen would show literally nothing a tap-through wasn't already showing. The only editable field via `PATCH /api/attendance/:id` is `method`, and since every mobile-created record is already `MANUAL` with no QR capture to convert from, there is no real scenario in this app where changing it would do anything useful. Building an edit UI for that would be "unnecessary editing UI" by the ticket's own explicit test.
+
+Separately: status (`PRESENT`/`ABSENT`) is set only at creation, through the create form's toggle — there is no path anywhere in the mobile app that lets a caller flip an existing record's status via `PATCH`. That's not an oversight; the backend's `updateAttendanceSchema` doesn't accept a `status` field at all (status changes are reserved for the not-yet-built Attendance Corrections workflow), and the mobile UI doesn't try to work around that.
+
+### Reason
+
+Every one of these is the milestone ticket's own explicit guidance applied literally: "do not pretend QR scanning works," "if supporting check-in time creates unnecessary timezone complexity... omit it," "do not add unnecessary editing UI," and "do not bypass [the Attendance Correction] architecture." None of these are judgment calls beyond what was already specified — they're the specification.
+
+### Alternatives Considered
+
+- A method picker with QR disabled/greyed-out (rather than absent entirely) — rejected; a visibly-present-but-unusable option still implies QR capture is a real, almost-available feature, which it isn't in this milestone.
+- A `checkInAt` field defaulting to "now" when the form is submitted — rejected; that's inventing a fact (the exact instant of submission is not necessarily when the employee actually checked in) rather than reporting one, and no design reference asked for it.
+
+### Trade-offs
+
+- An organization that starts using QR devices elsewhere would see those records correctly (method displays as "QR" on the card) but could never re-tag one as "MANUAL" or vice versa from the mobile app. Given no real workflow in this milestone would ever need that, this is judged a non-issue rather than a deferred gap.

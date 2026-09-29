@@ -15,3 +15,6 @@ export { DashboardSection } from "./DashboardSection";
 export { SummaryRow } from "./SummaryRow";
 export { EmployeeCard } from "./EmployeeCard";
 export { EmployeeForm } from "./EmployeeForm";
+export { AttendanceCard } from "./AttendanceCard";
+export { AttendanceDateSelector } from "./AttendanceDateSelector";
+export { AttendanceForm } from "./AttendanceForm";
