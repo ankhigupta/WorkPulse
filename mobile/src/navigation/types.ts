@@ -40,3 +40,16 @@ export type PayrollStackParamList = {
   PaymentCreate: { employeeId?: string; employeeName?: string } | undefined;
   EmployeeBalance: { employeeId: string; employeeName?: string };
 };
+
+export type MoreStackParamList = {
+  MoreHome: undefined;
+  AttendanceReport: undefined;
+  PayrollReport: undefined;
+  PaymentsReport: undefined;
+  WorkforceReport: undefined;
+  Account: undefined;
+  Organization: undefined;
+  StoreList: undefined;
+  StoreCreate: undefined;
+  StoreEdit: { storeId: string };
+};

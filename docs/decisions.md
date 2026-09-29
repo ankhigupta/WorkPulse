@@ -310,3 +310,28 @@ Noon UTC sidesteps both: it's a single, unconditional rule (not two rules picked
 ### Trade-offs
 
 - Every payment's `paidAt` clock time reads as "noon" (in whatever timezone a future screen might display it in), which is a cosmetic artifact of this choice — nothing in the product currently displays or depends on that clock time being meaningful, only the calendar date, so this is accepted as a non-issue rather than a defect.
+
+---
+
+## ADR-013: Reports' Employee/Store Pickers Are a Shared `SelectField`, Breaking From the "Local Copy Per Form" Precedent
+
+**Status:** Accepted
+
+### Decision
+
+Every prior milestone with a searchable employee-or-store picker (Attendance's create form, Payroll's create form, Payment's create form, Manager's create/edit form) implemented its own self-contained, near-identical modal-list picker component, deliberately kept local to that file rather than shared — each milestone's report explicitly reasoned that duplicating ~60 lines was safer than touching or coupling to already-shipped modules outside that milestone's scope.
+
+The Reports module breaks from that: `SelectField` (`src/components/SelectField.tsx`) is a single generic single-select modal picker, used across all four report screens for their employee and/or store filters — at least six call sites within this one milestone alone.
+
+### Reason
+
+The "keep it local" reasoning in every prior ADR/doc note was specifically about not reaching back into *already-shipped* screens to refactor them — the risk being an edit to working, tested code outside the current milestone's actual scope. That reasoning doesn't apply to genuinely new code being written multiple times *within the same milestone*: writing the same ~60-line picker six times over in one sitting is exactly the duplication a shared component exists to avoid, without touching a single previously-completed file to get there. `AttendanceForm`, `PayrollCreateScreen`, `PaymentCreateScreen`, and `ManagerForm` all keep their own existing local pickers untouched — this doesn't retrofit them.
+
+### Alternatives Considered
+
+- A sixth-through-ninth local copy, one per report screen — rejected; past the point any reasonable "avoid touching other milestones' code" justification applies, since all six new call sites are being written in this same milestone with nothing external at stake.
+- Refactoring the four existing local pickers to also use `SelectField` — rejected for this milestone; those files are complete, tested, and outside this ticket's scope ("do not rewrite completed modules"). `SelectField` is additive only.
+
+### Trade-offs
+
+- The app now has two coexisting patterns for "pick one item from a list" — four bespoke local copies (Attendance/Payroll/Payment/Manager) and one shared `SelectField` (Reports). This is an accepted, temporary inconsistency rather than a defect: a future cleanup milestone that's explicitly scoped to include it could migrate the older forms onto `SelectField`, but doing that unprompted here would have meant editing four completed modules' files for a ticket that only asked for Reports.

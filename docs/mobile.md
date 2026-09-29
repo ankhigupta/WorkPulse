@@ -1,6 +1,6 @@
 # Mobile App
 
-Status: foundation (navigation, theme, auth, API client, Login screen), a real Home/Dashboard screen, a real Employees module (list/detail/create/edit), a real Managers module (list/detail/create/edit, `ORGANIZATION_ADMIN`-only), a real Attendance module (list + manual create), a real Attendance Corrections module (request/list/approve/reject), a real Payroll module (list/create/recalculate/finalize), and a real Payment Ledger module (list/record/balance) — Payroll and Payments both also `ORGANIZATION_ADMIN`-only. See `docs/decisions.md` ADR-006 through ADR-012 for the architecture decisions behind it.
+Status: foundation (navigation, theme, auth, API client, Login screen), a real Home/Dashboard screen, a real Employees module (list/detail/create/edit), a real Managers module (list/detail/create/edit, `ORGANIZATION_ADMIN`-only), a real Attendance module (list + manual create), a real Attendance Corrections module (request/list/approve/reject), a real Payroll module (list/create/recalculate/finalize), a real Payment Ledger module (list/record/balance), a real Reports module (Attendance/Payroll/Payments/Workforce, filterable, both roles), and a real, role-aware More/Admin area (Account, Organization, Stores) — Payroll and Payments both `ORGANIZATION_ADMIN`-only. See `docs/decisions.md` ADR-006 through ADR-013 for the architecture decisions behind it.
 
 ## Stack
 
@@ -14,15 +14,15 @@ Run with Node 22 LTS (`nvm use 22`), not the backend's Node 24 — Expo/Metro co
 mobile/
   App.tsx                 — providers (React Query, Paper, SafeArea, NavigationContainer), font/auth bootstrap, splash hold
   src/
-    api/                   client.ts (axios instance + 401 refresh-and-retry), auth.ts, dashboard.ts, employees.ts, managers.ts, stores.ts, attendance.ts, attendanceCorrections.ts, payroll.ts, payments.ts
-    components/            AppText, AppButton, AppInput, AppCard, ScreenContainer, SectionHeader, StatusBadge, Avatar, IconButton, Divider, LoadingState, EmptyState, MetricCard, DashboardSection, SummaryRow, EmployeeCard, EmployeeForm, ManagerCard, ManagerForm, AttendanceCard, AttendanceDateSelector, AttendanceForm, CorrectionCard, PayrollCard, PaymentCard
+    api/                   client.ts (axios instance + 401 refresh-and-retry), auth.ts, dashboard.ts, employees.ts, managers.ts, stores.ts (now also create/update), organization.ts (new), attendance.ts, attendanceCorrections.ts, payroll.ts, payments.ts, reports.ts
+    components/            AppText, AppButton, AppInput, AppCard, ScreenContainer, SectionHeader, StatusBadge, Avatar, IconButton, Divider, LoadingState, EmptyState, MetricCard, DashboardSection, SummaryRow, EmployeeCard, EmployeeForm, ManagerCard, ManagerForm, AttendanceCard, AttendanceDateSelector, AttendanceForm, CorrectionCard, PayrollCard, PaymentCard, SelectField, DateRangeFilter, StoreCard, StoreForm
     constants/config.ts    API_BASE_URL (EXPO_PUBLIC_API_URL, else localhost/10.0.2.2 by platform)
-    hooks/                 useDashboardSummary.ts, useEmployees.ts, useManagers.ts, useStores.ts, useAttendance.ts, useAttendanceCorrections.ts, usePayroll.ts, usePayments.ts
-    navigation/            AuthNavigator (Login), AppNavigator (bottom tabs — Payroll conditionally registered, see ADR-011), EmployeesNavigator (nested stack — now also holds Manager list/detail/create/edit), AttendanceNavigator, PayrollNavigator (nested stacks — the latter now also holds Payments list/create + EmployeeBalance), RootNavigator, types.ts
-    screens/               LoginScreen, HomeScreen, employees/ (List/Detail/Create/Edit), managers/ (List/Detail/Create/Edit), attendance/ (List/Create, CorrectionsList, CorrectionCreate), payroll/ (List/Create), payments/ (List/Create, EmployeeBalance), More (placeholder)
+    hooks/                 useDashboardSummary.ts, useEmployees.ts, useManagers.ts, useStores.ts (now also create/update), useOrganization.ts (new), useAttendance.ts, useAttendanceCorrections.ts, usePayroll.ts, usePayments.ts, useReports.ts
+    navigation/            AuthNavigator (Login), AppNavigator (bottom tabs — Payroll conditionally registered, see ADR-011), EmployeesNavigator (nested stack — now also holds Manager list/detail/create/edit), AttendanceNavigator, PayrollNavigator (nested stacks — the latter now also holds Payments list/create + EmployeeBalance), MoreNavigator (Reports + Account + Organization + Stores, all role-aware), RootNavigator, types.ts
+    screens/               LoginScreen, HomeScreen, employees/ (List/Detail/Create/Edit), managers/ (List/Detail/Create/Edit), attendance/ (List/Create, CorrectionsList, CorrectionCreate), payroll/ (List/Create), payments/ (List/Create, EmployeeBalance), more/ (MoreHome, Account, Organization), reports/ (Attendance/Payroll/Payments/Workforce), stores/ (List/Create/Edit)
     stores/authStore.ts    Zustand — accessToken/user in memory, refresh token in SecureStore only
     theme/                 colors.ts, typography.ts, spacing.ts, index.ts (static `theme` export)
-    types/                 auth.ts, employee.ts, manager.ts, store.ts, api.ts, dashboard.ts, attendance.ts, attendanceCorrection.ts, payroll.ts, payment.ts
+    types/                 auth.ts, employee.ts, manager.ts, store.ts (now also Create/UpdateStoreInput), organization.ts (new), api.ts, dashboard.ts, attendance.ts, attendanceCorrection.ts, payroll.ts, payment.ts, report.ts
     utils/                 format.ts (currency/date/datetime display, UTC-safe), validation.ts (email pattern, date-only shape check, money-amount shape check), date.ts (calendar-date arithmetic, UTC-safe, incl. month bounds)
 ```
 
@@ -125,6 +125,52 @@ Backed by `GET/POST /api/payments` and `GET /api/payments/balance/:employeeId` �
 
 `amount` is the one financial field the backend requires as a plain JSON number (`z.number()`, not a coerced string) — the create form still treats it as text throughout (validated by `utils/validation.ts`'s new `isValidMoneyAmount`, mirroring the backend's exact positive/≤2-decimals/≤99999999.99 constraint) and converts it to a number exactly once, at submission, never for any local arithmetic.
 
+## Reports module
+
+Backed by `GET /api/reports/{attendance,payroll,payments,workforce}` — no backend changes. Available to **both** `ORGANIZATION_ADMIN` and `STORE_MANAGER` (`reports.routes.ts` allows both), unlike Payroll/Payments/Managers — so the `More` tab itself needs no role gate; only each report's *store filter* is conditionally hidden for `STORE_MANAGER` (their store is auto-scoped server-side regardless, same pattern as every other store-filterable screen in this app).
+
+Lives inside a new `MoreNavigator` — the first real content behind the `More` tab, which was a bare placeholder before this milestone. `MoreHomeScreen` shows the four reports as real entry-point cards, not a generic "coming soon."
+
+**The Attendance report is a different shape from the Attendance module's own record list — this is a backend fact, not a mobile simplification.** `GET /api/reports/attendance` returns *per-employee aggregates* (`prisma.attendance.groupBy` present/absent counts over the period), not individual attendance rows — there is no `method`, no per-record date, no check-in time anywhere in this response. The report screen shows exactly what's there: employee, present/absent/total, attendance rate — confirmed by reading `reports.service.ts` directly, not assumed from the Attendance module's shape.
+
+**No client-side report math anywhere.** Payroll/Payments report totals (`draftTotal`, `finalizedTotal`, `totalPaid`, and every per-row `totalWage`/`amount`) are the backend's own pre-formatted `.toFixed(2)` strings, passed straight to the existing `formatCurrency` — nothing in `useReports.ts` or any report screen sums, multiplies, or recalculates a figure the backend already computed.
+
+**Two different filter-commit behaviors, deliberately.** The three date-based reports (Attendance/Payroll/Payments) require an explicit "Apply" tap before a new date range triggers a request — free-text `YYYY-MM-DD` fields are invalid mid-keystroke, so auto-fetching on every character would be wasted/broken requests. Discrete filters (employee/store pickers, the payroll status chips, the workforce active-only switch) refetch immediately on change instead — they're always a complete, valid selection the instant they change, so there's nothing to wait for. Every report screen still opens pre-filled with a sensible default range (start of the current calendar month → today, reusing `utils/date.ts`'s existing `startOfMonth`/`todayDateOnly`) and fetches that immediately, so no report is ever empty-by-default while waiting for a first Apply tap.
+
+**`GET /api/reports/payments` has no `storeId` filter at all** (confirmed against `paymentsReportQuerySchema`) — `PaymentsReportScreen` never shows a store picker, for either role, unlike the other three reports. Per-row `storeName` is still shown where the response actually returns it (it does, via the employee relation) — the *filter* doesn't exist; the *field* does.
+
+**`activeOnly` is sent as the string `"true"`/`"false"`, never a real boolean, and only when explicitly set.** `workforceReportQuerySchema` parses an HTTP query string, not a JSON boolean — `api/reports.ts` converts right before the request rather than changing the type client-side, and omits the key entirely when unset so the backend's own default (`true`) applies instead of the client guessing at it.
+
+No export/download of any kind was implemented — `reports.routes.ts` has no such endpoint, and none was invented.
+
+See ADR-013 for why this milestone's employee/store pickers (`SelectField`) are a genuinely shared component, unlike every prior milestone's local per-form picker copies.
+
+## More / Admin area
+
+`MoreHomeScreen` is a role-aware menu, not a static placeholder — every section is derived directly from `useAuthStore`'s `user.role`, mirroring the exact role-gating pattern already used for the Payroll tab (ADR-011) and Reports' store filters, just applied at the section level within one screen instead of a whole tab/route:
+
+- **Reports** (Attendance/Payroll/Payments/Workforce) — shown for `ORGANIZATION_ADMIN` and `STORE_MANAGER` only, matching `reports.routes.ts`'s `requireRole`. Previously shown unconditionally; this milestone added the missing gate so `EMPLOYEE`/`SUPER_ADMIN` (who would 403 on every report) never see the entry points at all.
+- **Administration** (Organization, Stores) — `ORGANIZATION_ADMIN` only, matching `organization.routes.ts`/`store.routes.ts`.
+- **Account** — every role, always.
+
+`MoreNavigator` registers every screen unconditionally (same pattern `EmployeesNavigator` already uses for Manager screens) — the menu entries are gated, not the routes themselves.
+
+### Organization
+
+Backed by `GET/PATCH /api/organizations/:id` — **a real, previously-unused backend capability**, discovered by inspecting `organization.routes.ts` directly for this milestone rather than assumed. An `ORGANIZATION_ADMIN` may look up and rename *only their own* organization (`organization.service.ts` 404s any other id, not 403 — IDOR hygiene, not a bug to work around). `isActive` is shown read-only: it's a `SUPER_ADMIN`-only concern (platform suspend/reactivate) that `updateOrganizationAsOrgAdminSchema` doesn't accept from this role, so the mobile form never offers to change it. No organization creation, listing, or `SUPER_ADMIN` console of any kind — `POST/GET /api/organizations` (create/list-all) are `SUPER_ADMIN`-only and outside this app's defined scope, per the milestone ticket.
+
+### Stores
+
+Backed by the **existing** `GET/POST/PATCH /api/stores` — `api/stores.ts`/`hooks/useStores.ts` were *extended* with `createStore`/`updateStore` (and matching mutation hooks), not duplicated into a second module; `listStores`/`useStoreList` are the exact same functions every store-picker in the app already called. This is the first screen set that lets an admin actually manage stores (every prior use was read-only, as a picker inside other forms) — `StoreEditScreen` reuses the already-cached store list to pre-fill its form rather than adding a second per-store fetch. No delete anywhere; `isActive` is the only lifecycle control, matching the backend (there is no DELETE route on `/api/stores` at all).
+
+### Account
+
+Shows only what `GET /api/auth/me` actually returns — `email`, `role`, and (enrichment, `ORGANIZATION_ADMIN` only) the organization's real `name` via the same `useOrganization` hook the Organization screen uses. No display name, phone, avatar, or job title — `User` has none of these fields, and none were invented. Includes the Sign Out action.
+
+### Logout — unchanged, already correct
+
+Logout required no changes at all: `authStore.logout()` (built during the foundation milestone) already clears the SecureStore refresh token and Zustand state synchronously before the best-effort `POST /api/auth/logout` call, so a failed/unreachable server request never leaves the device locally authenticated. `RootNavigator` swaps `AppNavigator` for `AuthNavigator` entirely on `status` change (not a screen pushed on top) — the whole authenticated navigator tree, including every nested stack's history, is unmounted, so there is no back-navigation path into any authenticated screen after logout. `AccountScreen`'s Sign Out button is simply a second entry point to this same, already-correct action — `HomeScreen`'s own Sign Out button is untouched.
+
 ## What's intentionally not here yet
 
-QR attendance capture, reports, employee notes, QR code display, offline sync, push notifications, employee invitation/account-linking, manager password reset — all separate future milestones (or, for password reset, not supported by the backend at all yet). The More tab is still an `EmptyState` placeholder.
+QR attendance capture, employee notes, QR code display, offline sync, push notifications, employee invitation/account-linking, manager password reset, report export, a `SUPER_ADMIN` organization console — all separate future milestones (or, for password reset/export/`SUPER_ADMIN` console, not supported by the backend or in this product's defined mobile scope at all).

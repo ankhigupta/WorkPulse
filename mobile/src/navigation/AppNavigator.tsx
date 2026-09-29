@@ -4,7 +4,7 @@ import { HomeScreen } from "../screens/HomeScreen";
 import { AttendanceNavigator } from "./AttendanceNavigator";
 import { EmployeesNavigator } from "./EmployeesNavigator";
 import { PayrollNavigator } from "./PayrollNavigator";
-import { MoreScreen } from "../screens/MoreScreen";
+import { MoreNavigator } from "./MoreNavigator";
 import { useAuthStore } from "../stores/authStore";
 import { colors } from "../theme";
 import type { AppTabParamList } from "./types";
@@ -53,7 +53,7 @@ export function AppNavigator() {
       <Tab.Screen name="Attendance" component={AttendanceNavigator} />
       <Tab.Screen name="Employees" component={EmployeesNavigator} />
       {showPayroll ? <Tab.Screen name="Payroll" component={PayrollNavigator} /> : null}
-      <Tab.Screen name="More" component={MoreScreen} />
+      <Tab.Screen name="More" component={MoreNavigator} />
     </Tab.Navigator>
   );
 }
