@@ -1,6 +1,6 @@
 # Mobile App
 
-Status: foundation only (navigation, theme, auth, API client, Login screen). See `docs/decisions.md` ADR-006 for the architecture decisions behind it.
+Status: foundation (navigation, theme, auth, API client, Login screen) plus a real Home/Dashboard screen. See `docs/decisions.md` ADR-006/ADR-007 for the architecture decisions behind it.
 
 ## Stack
 
@@ -14,14 +14,16 @@ Run with Node 22 LTS (`nvm use 22`), not the backend's Node 24 — Expo/Metro co
 mobile/
   App.tsx                 — providers (React Query, Paper, SafeArea, NavigationContainer), font/auth bootstrap, splash hold
   src/
-    api/                   client.ts (axios instance + 401 refresh-and-retry), auth.ts (login/refresh/logout/me)
-    components/            AppText, AppButton, AppInput, AppCard, ScreenContainer, SectionHeader, StatusBadge, Avatar, IconButton, Divider, LoadingState, EmptyState
+    api/                   client.ts (axios instance + 401 refresh-and-retry), auth.ts (login/refresh/logout/me), dashboard.ts (GET /dashboard/summary)
+    components/            AppText, AppButton, AppInput, AppCard, ScreenContainer, SectionHeader, StatusBadge, Avatar, IconButton, Divider, LoadingState, EmptyState, MetricCard, DashboardSection, SummaryRow
     constants/config.ts    API_BASE_URL (EXPO_PUBLIC_API_URL, else localhost/10.0.2.2 by platform)
+    hooks/useDashboardSummary.ts  TanStack Query wrapper around the dashboard API
     navigation/            AuthNavigator (Login), AppNavigator (bottom tabs), RootNavigator (switches on auth status), types.ts
-    screens/               LoginScreen (real), Home/Attendance/Employees/Payroll/More (placeholders)
+    screens/               LoginScreen (real), HomeScreen (real dashboard), Attendance/Employees/Payroll/More (placeholders)
     stores/authStore.ts    Zustand — accessToken/user in memory, refresh token in SecureStore only
     theme/                 colors.ts, typography.ts, spacing.ts, index.ts (static `theme` export)
-    types/                 auth.ts, employee.ts, store.ts, api.ts
+    types/                 auth.ts, employee.ts, store.ts, api.ts, dashboard.ts
+    utils/format.ts        formatCurrency (₹, en-IN grouping), formatPeriodLabel (UTC-safe)
 ```
 
 ## Theme
@@ -40,6 +42,18 @@ Backed by the existing `POST /api/auth/{login,refresh,logout}` + `GET /api/auth/
 ## Employee ≠ User, reflected in the client
 
 `src/types/employee.ts`'s `Employee.user` is `T | null`, matching the backend exactly (see `docs/database.md`'s "Employee ≠ User"). `Employee.name` is the only field used for display; nothing in the mobile codebase reads `user.email` as an identity. No employee-management screens exist yet, but the type is intentionally correct ahead of that milestone.
+
+## Dashboard (Home screen)
+
+Backed by the existing `GET /api/dashboard/summary` — no new backend endpoint, no backend changes at all. Server state lives in TanStack Query (`useDashboardSummary`, key `["dashboard", "summary"]`), never in Zustand — Zustand is auth-session state only. Pull-to-refresh calls `refetch()` on the same query; it does not maintain a parallel copy of the data.
+
+No date params are sent yet — the screen relies entirely on the backend's own current-calendar-month default. Adding a date range picker is deferred (see ADR-007) rather than assumed.
+
+**Everything shown is a real field from the API response — nothing is invented.** Two deliberate departures from the design reference, both because the underlying data doesn't exist:
+- Attendance only shows Present/Absent (+ rate) — the backend models exactly those two statuses, not the four (On time/Late/Absent/Leave) the design mockup shows.
+- The store-filter chip row, the notification bell, the "Needs attention" correction list, and the "Processing" payroll status badge are all absent from the screen — `dashboard.schemas.ts` accepts no `storeId` filter, the summary response has no per-correction list or notification data, and `Payroll.status` is only ever `DRAFT`/`FINALIZED`, never "Processing." None of these are derivable from `GET /api/dashboard/summary`, so they're omitted rather than faked.
+
+The greeting reads "Good morning, {organization.name}" rather than a person's name — `User` (the login identity) has no name field, only `email` (see ADR-005); inventing a display name would misrepresent real data.
 
 ## What's intentionally not here yet
 

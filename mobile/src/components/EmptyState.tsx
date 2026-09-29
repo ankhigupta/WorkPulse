@@ -1,15 +1,18 @@
 import { StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { AppText } from "./AppText";
+import { AppButton } from "./AppButton";
 import { colors, spacing } from "../theme";
 
 interface EmptyStateProps {
   icon?: keyof typeof Ionicons.glyphMap;
   title: string;
   message?: string;
+  actionLabel?: string;
+  onAction?: () => void;
 }
 
-export function EmptyState({ icon = "file-tray-outline", title, message }: EmptyStateProps) {
+export function EmptyState({ icon = "file-tray-outline", title, message, actionLabel, onAction }: EmptyStateProps) {
   return (
     <View style={styles.container}>
       <Ionicons name={icon} size={40} color={colors.textMuted} />
@@ -20,6 +23,11 @@ export function EmptyState({ icon = "file-tray-outline", title, message }: Empty
         <AppText variant="bodySmall" style={styles.message}>
           {message}
         </AppText>
+      ) : null}
+      {actionLabel && onAction ? (
+        <View style={styles.action}>
+          <AppButton label={actionLabel} onPress={onAction} variant="secondary" />
+        </View>
       ) : null}
     </View>
   );
@@ -39,5 +47,8 @@ const styles = StyleSheet.create({
   },
   message: {
     textAlign: "center",
+  },
+  action: {
+    marginTop: spacing.md,
   },
 });

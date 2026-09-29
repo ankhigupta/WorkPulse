@@ -10,3 +10,6 @@ export { IconButton } from "./IconButton";
 export { Divider } from "./Divider";
 export { LoadingState } from "./LoadingState";
 export { EmptyState } from "./EmptyState";
+export { MetricCard } from "./MetricCard";
+export { DashboardSection } from "./DashboardSection";
+export { SummaryRow } from "./SummaryRow";

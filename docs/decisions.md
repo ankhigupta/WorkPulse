@@ -142,3 +142,33 @@ Three related choices made while scaffolding `mobile/`:
 
 - Cold start always costs one network round trip (`/api/auth/refresh` + `/api/auth/me`) before the app is usable, even if the access token from the last session technically hadn't expired yet.
 - Node 22 LTS is used for the mobile toolchain instead of the backend's Node 24, since Expo/Metro compatibility with a Node major that new hasn't been validated upstream yet — the two apps don't need matching Node versions, so this costs nothing beyond remembering to `nvm use 22` in `mobile/`.
+
+---
+
+## ADR-007: Mobile Dashboard Shows Only What `GET /api/dashboard/summary` Actually Returns
+
+**Status:** Accepted
+
+### Decision
+
+The Home screen's data is a direct, unmodified read of the existing `GET /api/dashboard/summary` response via TanStack Query — no new backend endpoint, no backend changes. Several elements the Mobile Home design reference shows are deliberately **not** rendered, because no combination of real fields in that response can honestly represent them:
+
+- **Attendance is Present/Absent only** (+ the rate the backend already computes), not the four-way On time/Late/Absent/Leave breakdown the mockup shows. The schema only ever models `PRESENT`/`ABSENT` (see `docs/database.md`); inventing "Late" or "On Leave" would mean inventing a business concept that doesn't exist yet.
+- **No store-filter chips.** `dashboard.schemas.ts` accepts only `startDate`/`endDate` — there is no `storeId` query parameter to filter by, and a `STORE_MANAGER`'s scope is already fixed server-side. Adding store filtering would mean changing the backend's query contract, which this milestone's ticket explicitly said to avoid unless genuinely required — and it isn't, for a foundation dashboard.
+- **No notification bell, no "Needs attention" correction list.** The summary response has no notification data and no per-item attendance-correction list (only a future Corrections module would have per-item detail) — nothing to show here would be real.
+- **No "Processing" payroll status.** `Payroll.status` is `DRAFT` or `FINALIZED` only; the design's "Processing" badge doesn't correspond to any state the backend tracks. The screen instead shows the real `finalizedTotal`/`draftTotal` split.
+- **The greeting uses the organization's name, not a person's name.** `User` (the login identity an `ORGANIZATION_ADMIN`/`STORE_MANAGER` authenticates as) has no `name` field, only `email` — see ADR-005, where the workforce identity (`Employee.name`) was deliberately kept separate from the login identity. Displaying a fabricated name would violate the same principle that ADR-005 established.
+
+### Reason
+
+The milestone ticket is explicit: "Use ONLY real data returned by the Dashboard API. Do not invent metrics... if it cannot [be derived], do not fake it — omit it or use a sensible non-misleading treatment." A dashboard that silently fabricates or mislabels numbers is worse than one that shows less — it erodes trust in every other number on the same screen.
+
+### Alternatives Considered
+
+- Approximating "Late" as some derived heuristic (e.g., attendance marked after a cutoff time) — rejected; `Attendance` has no check-in *time* field at all, only a status and a date, so there is no real signal to derive "Late" from.
+- Adding a `storeId` filter to `GET /api/dashboard/summary` to support the design's store chips — rejected for this milestone; it's a genuine backend contract change (new query param, new scoping logic) the ticket said to avoid unless the mobile dashboard "genuinely cannot" work without it, and it can — org-wide is a perfectly valid V1 view.
+- Showing the design's four-color attendance bar anyway with "Late"/"Leave" segments hardcoded to zero — rejected; a permanently-zero segment in the UI implies tracking that isn't happening, which is its own kind of misleading.
+
+### Trade-offs
+
+- The Home screen is visually simpler than the design mockup — fewer cards, no store switcher, no live correction feed. That gap closes naturally as the Attendance Corrections and Notifications features get their own mobile milestones with real backing data, not by front-loading fake UI now.
