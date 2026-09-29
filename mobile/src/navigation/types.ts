@@ -9,3 +9,10 @@ export type AppTabParamList = {
   Payroll: undefined;
   More: undefined;
 };
+
+export type EmployeesStackParamList = {
+  EmployeeList: undefined;
+  EmployeeDetail: { employeeId: string };
+  EmployeeCreate: undefined;
+  EmployeeEdit: { employeeId: string };
+};

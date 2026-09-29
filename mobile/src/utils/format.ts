@@ -1,10 +1,25 @@
-// startDate/endDate from the API are date-only strings (YYYY-MM-DD). Passing
-// them straight to `new Date(...)` and formatting in the device's local
-// timezone can shift the displayed calendar date by a day — the same UTC-safe
-// discipline the backend applies to every date-only field applies here too:
-// parse as UTC midnight, and always format with `timeZone: "UTC"` explicitly.
+// Some endpoints (Dashboard's period) send a plain "YYYY-MM-DD"; others
+// (Employee.joinedAt — a raw Prisma DateTime, never reformatted server-side)
+// send a full ISO datetime like "2026-01-15T00:00:00.000Z". Both forms
+// always start with the calendar date, so slicing to 10 chars normalizes
+// either shape before it's ever parsed or shown in a form field.
+export function toDateOnlyString(value: string): string {
+  return value.slice(0, 10);
+}
+
+// Passing a date-only string straight to `new Date(...)` and formatting in
+// the device's local timezone can shift the displayed calendar date by a
+// day — the same UTC-safe discipline the backend applies to every
+// date-only field applies here too: parse as UTC midnight, and always
+// format with `timeZone: "UTC"` explicitly.
 function parseDateOnly(value: string): Date {
-  return new Date(`${value}T00:00:00Z`);
+  return new Date(`${toDateOnlyString(value)}T00:00:00Z`);
+}
+
+export function formatDateOnly(value: string): string {
+  return new Intl.DateTimeFormat("en-US", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(
+    parseDateOnly(value),
+  );
 }
 
 export function formatPeriodLabel(startDate: string, endDate: string): string {

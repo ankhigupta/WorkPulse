@@ -13,3 +13,5 @@ export { EmptyState } from "./EmptyState";
 export { MetricCard } from "./MetricCard";
 export { DashboardSection } from "./DashboardSection";
 export { SummaryRow } from "./SummaryRow";
+export { EmployeeCard } from "./EmployeeCard";
+export { EmployeeForm } from "./EmployeeForm";

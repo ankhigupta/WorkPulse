@@ -172,3 +172,33 @@ The milestone ticket is explicit: "Use ONLY real data returned by the Dashboard 
 ### Trade-offs
 
 - The Home screen is visually simpler than the design mockup — fewer cards, no store switcher, no live correction feed. That gap closes naturally as the Attendance Corrections and Notifications features get their own mobile milestones with real backing data, not by front-loading fake UI now.
+
+---
+
+## ADR-008: Mobile Employees Module — Real Fields Only, Backend Roles Are the Only Authorization System
+
+**Status:** Accepted
+
+### Decision
+
+The mobile Employees list/detail/create/edit screens show and accept only fields that actually exist in the backend's `Employee`/`Store` models, and role-gate every mutating action by mirroring — never re-deriving — the backend's own route permissions:
+
+1. **List item content.** The design reference's employee row shows an `EMP-1042`-style code, a job title ("Sales Associate"), and a per-employee "22/23 days present this month" progress line. None of these exist in the `Employee` model, and the attendance figure specifically would require one attendance-aggregation call per employee (an N+1 pattern the milestone ticket explicitly forbade). All three are replaced with real, single-call fields: login-account status (`employee.user` present or not) and, for `ORGANIZATION_ADMIN`, the store name.
+2. **Filter chips are All/Active/Inactive, not All/Active/On leave/Inactive.** `Employee.isActive` is the only lifecycle field that exists; "on leave" isn't a concept the schema has (an `Attendance` row's `ABSENT` status is a single day's fact, not an employee lifecycle state).
+3. **Create/Edit are only ever shown to `ORGANIZATION_ADMIN`.** `POST /api/employees` and `PATCH /api/employees/:id` are `ORGANIZATION_ADMIN`-only routes (confirmed by reading `employee.routes.ts`, not assumed) — `STORE_MANAGER` can list and view employees in their own store but cannot create or edit any of them. The mobile UI simply never renders the "+" button or the "Edit" button for that role; it does not implement a second, parallel authorization system to decide this.
+4. **The store picker (create/edit) calls `GET /api/stores`, which is `ORGANIZATION_ADMIN`-only entirely** — consistent with #3, since only that role ever reaches a screen that needs it. `STORE_MANAGER` has no endpoint anywhere that returns their own store's name (`/api/stores` and `/api/managers` are both gated to `ORGANIZATION_ADMIN`); the employee list/detail screens simply don't show a store name for that role rather than guessing one.
+5. **The employee `qrCodeToken` is never fetched into a display path, logged, or rendered.** The milestone ticket explicitly said not to show it unless required, and QR functionality isn't part of this milestone.
+
+### Reason
+
+Same principle as ADR-007: a screen that fabricates data it doesn't have is worse than one that honestly shows less. The role-mirroring approach (rather than a separate mobile permissions model) avoids the two ever drifting out of sync — the backend route guards are the single source of truth for who can do what, and the mobile app already gets the authenticated user's role from the existing auth store, so mirroring it is a read, not a new system.
+
+### Alternatives Considered
+
+- Calling the Attendance/Reports endpoints per employee to populate the design's progress line — rejected; explicit N+1 anti-pattern the ticket called out, and attendance screens are out of scope for this milestone entirely.
+- A separate mobile-side role/permission config (e.g., a table of `{role, action, allowed}`) — rejected; the backend's `requireRole(...)` calls on each route are already that table, and duplicating it client-side only creates a second place that can go stale.
+- Adding a `GET /api/managers/me`-style endpoint so `STORE_MANAGER` could see their own store's name — rejected for this milestone as a backend change beyond what employee CRUD genuinely needs; noted as a legitimate future gap rather than worked around with a guess.
+
+### Trade-offs
+
+- A `STORE_MANAGER` sees "Your store" instead of an actual store name anywhere in the Employees module, since no endpoint gives them that name. This is a minor, honest UX gap, not a bug — the alternative (guessing or caching a name from some other screen) risks showing a stale or wrong store name with no way to know.

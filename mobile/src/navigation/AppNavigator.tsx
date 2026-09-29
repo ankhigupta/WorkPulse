@@ -2,7 +2,7 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
 import { HomeScreen } from "../screens/HomeScreen";
 import { AttendanceScreen } from "../screens/AttendanceScreen";
-import { EmployeesScreen } from "../screens/EmployeesScreen";
+import { EmployeesNavigator } from "./EmployeesNavigator";
 import { PayrollScreen } from "../screens/PayrollScreen";
 import { MoreScreen } from "../screens/MoreScreen";
 import { colors } from "../theme";
@@ -42,7 +42,7 @@ export function AppNavigator() {
     >
       <Tab.Screen name="Home" component={HomeScreen} />
       <Tab.Screen name="Attendance" component={AttendanceScreen} />
-      <Tab.Screen name="Employees" component={EmployeesScreen} />
+      <Tab.Screen name="Employees" component={EmployeesNavigator} />
       <Tab.Screen name="Payroll" component={PayrollScreen} />
       <Tab.Screen name="More" component={MoreScreen} />
     </Tab.Navigator>

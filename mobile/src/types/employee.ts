@@ -23,3 +23,26 @@ export interface Employee {
     isActive: boolean;
   } | null;
 }
+
+// Mirrors backend/src/modules/employees/employee.schemas.ts's createEmployeeSchema.
+// email/password must be supplied together or not at all — validated the
+// same way client-side before ever hitting the API.
+export interface CreateEmployeeInput {
+  name: string;
+  storeId: string;
+  dailyWage: number;
+  joinedAt: string;
+  email?: string;
+  password?: string;
+}
+
+// Mirrors updateEmployeeSchema — deliberately has no email/password fields.
+// The update endpoint doesn't accept them; linking/changing a login account
+// isn't part of this API.
+export interface UpdateEmployeeInput {
+  name?: string;
+  storeId?: string;
+  dailyWage?: number;
+  joinedAt?: string;
+  isActive?: boolean;
+}

@@ -1,6 +1,6 @@
 # Mobile App
 
-Status: foundation (navigation, theme, auth, API client, Login screen) plus a real Home/Dashboard screen. See `docs/decisions.md` ADR-006/ADR-007 for the architecture decisions behind it.
+Status: foundation (navigation, theme, auth, API client, Login screen), a real Home/Dashboard screen, and a real Employees module (list/detail/create/edit). See `docs/decisions.md` ADR-006/ADR-007/ADR-008 for the architecture decisions behind it.
 
 ## Stack
 
@@ -14,16 +14,16 @@ Run with Node 22 LTS (`nvm use 22`), not the backend's Node 24 — Expo/Metro co
 mobile/
   App.tsx                 — providers (React Query, Paper, SafeArea, NavigationContainer), font/auth bootstrap, splash hold
   src/
-    api/                   client.ts (axios instance + 401 refresh-and-retry), auth.ts (login/refresh/logout/me), dashboard.ts (GET /dashboard/summary)
-    components/            AppText, AppButton, AppInput, AppCard, ScreenContainer, SectionHeader, StatusBadge, Avatar, IconButton, Divider, LoadingState, EmptyState, MetricCard, DashboardSection, SummaryRow
+    api/                   client.ts (axios instance + 401 refresh-and-retry), auth.ts, dashboard.ts, employees.ts, stores.ts
+    components/            AppText, AppButton, AppInput, AppCard, ScreenContainer, SectionHeader, StatusBadge, Avatar, IconButton, Divider, LoadingState, EmptyState, MetricCard, DashboardSection, SummaryRow, EmployeeCard, EmployeeForm
     constants/config.ts    API_BASE_URL (EXPO_PUBLIC_API_URL, else localhost/10.0.2.2 by platform)
-    hooks/useDashboardSummary.ts  TanStack Query wrapper around the dashboard API
-    navigation/            AuthNavigator (Login), AppNavigator (bottom tabs), RootNavigator (switches on auth status), types.ts
-    screens/               LoginScreen (real), HomeScreen (real dashboard), Attendance/Employees/Payroll/More (placeholders)
+    hooks/                 useDashboardSummary.ts, useEmployees.ts (list/detail/create/update), useStores.ts
+    navigation/            AuthNavigator (Login), AppNavigator (bottom tabs), EmployeesNavigator (nested stack: list/detail/create/edit), RootNavigator, types.ts
+    screens/               LoginScreen, HomeScreen (real dashboard), employees/ (List/Detail/Create/Edit, all real), Attendance/Payroll/More (placeholders)
     stores/authStore.ts    Zustand — accessToken/user in memory, refresh token in SecureStore only
     theme/                 colors.ts, typography.ts, spacing.ts, index.ts (static `theme` export)
     types/                 auth.ts, employee.ts, store.ts, api.ts, dashboard.ts
-    utils/format.ts        formatCurrency (₹, en-IN grouping), formatPeriodLabel (UTC-safe)
+    utils/                 format.ts (currency/date display, UTC-safe), validation.ts (email pattern, date-only shape check)
 ```
 
 ## Theme
@@ -55,6 +55,18 @@ No date params are sent yet — the screen relies entirely on the backend's own 
 
 The greeting reads "Good morning, {organization.name}" rather than a person's name — `User` (the login identity) has no name field, only `email` (see ADR-005); inventing a display name would misrepresent real data.
 
+## Employees module
+
+Backed entirely by the existing `GET/POST /api/employees`, `GET/PATCH /api/employees/:id`, and `GET /api/stores` (for the store picker) — no backend changes. Server state lives in TanStack Query (`useEmployeeList`, `useEmployee`, `useCreateEmployee`, `useUpdateEmployee`, all in `hooks/useEmployees.ts`); Zustand is untouched by any of it. Query key scheme: `["employees"]` for the list, `["employees", id]` for a detail — both create and update invalidate the plain `["employees"]` key, which TanStack Query's default prefix-matching also invalidates every cached detail under.
+
+The `EmployeeDetailScreen` seeds its query's `initialData` from the already-loaded list (same shape, both go through the backend's identical `employeeSelect`), so tapping a row shows real data instantly while the detail endpoint still revalidates in the background — not a second blind fetch, not stale-forever cached data either.
+
+**Role-gated by the backend's actual permissions, not a separate mobile rule:** `POST /employees` and `PATCH /employees/:id` are `ORGANIZATION_ADMIN`-only on the backend (`STORE_MANAGER` is read-only for employees) and `GET /stores` is `ORGANIZATION_ADMIN`-only entirely. The mobile UI mirrors this by simply not rendering the Create/Edit entry points for `STORE_MANAGER` — the backend remains the actual enforcement point if that were ever bypassed.
+
+Several elements in the Mobile Employees design reference aren't real backend fields and are omitted rather than faked — see ADR-008: the `EMP-XXXX` code and job title, the per-employee "days present this month" progress line, and the "On leave" filter chip.
+
+`joinedAt` from the API is a full ISO datetime (`2026-01-15T00:00:00.000Z`), not a plain date — `Employee.joinedAt` is a raw Prisma `DateTime` column, never reformatted server-side the way Dashboard's `period` dates are. `utils/format.ts`'s `toDateOnlyString()` slices it to `YYYY-MM-DD` before it ever reaches a form field, so editing an employee doesn't leak a raw timestamp into the joined-date input.
+
 ## What's intentionally not here yet
 
-Employee CRUD, attendance (QR or manual), payroll/payment screens, reports, manager workflows, offline sync, push notifications — all separate future milestones. The four non-Home tabs are `EmptyState` placeholders that exist only to prove the navigation shell works.
+Attendance (QR or manual), payroll/payment screens, reports, manager management, employee notes, QR display, offline sync, push notifications, employee invitation/account-linking — all separate future milestones. Attendance/Payroll/More tabs are still `EmptyState` placeholders.
