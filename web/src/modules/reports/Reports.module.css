@@ -1,0 +1,28 @@
+.tabs {
+  display: inline-flex;
+  gap: 2px;
+  padding: 4px;
+  margin-bottom: var(--space-xl);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.tab {
+  padding: 8px var(--space-lg);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  font-weight: var(--font-weight-bold);
+  text-decoration: none;
+}
+
+.tab:hover {
+  color: var(--color-text);
+}
+
+/* Selected tab — one of copper's designated homes. */
+.tabActive {
+  background: var(--color-copper-deep);
+  color: var(--color-copper-light);
+}

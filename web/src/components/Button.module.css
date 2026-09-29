@@ -1,0 +1,104 @@
+.base {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  min-height: 40px;
+  padding: 0 var(--space-lg);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: var(--font-weight-bold);
+  line-height: 20px;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+  white-space: nowrap;
+}
+
+.base:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Copper: the one primary action per screen. */
+.primary {
+  background: var(--color-copper);
+  color: var(--color-ink-on-copper);
+}
+
+.primary:hover:not(:disabled) {
+  background: var(--color-copper-hover);
+}
+
+.secondary {
+  background: transparent;
+  border-color: var(--color-border);
+  color: var(--color-text);
+}
+
+.secondary:hover:not(:disabled) {
+  border-color: var(--color-input-border);
+  background: var(--color-elevated);
+}
+
+.ghost {
+  background: transparent;
+  color: var(--color-text-secondary);
+}
+
+.ghost:hover:not(:disabled) {
+  background: var(--color-elevated);
+  color: var(--color-text);
+}
+
+.destructive {
+  background: transparent;
+  border-color: var(--color-border);
+  color: var(--color-error);
+}
+
+.destructive:hover:not(:disabled) {
+  background: rgba(238, 111, 138, 0.1);
+}
+
+/* Reserved for the single highest-emphasis action per screen, per the
+   design system's ivory highlight note. */
+.ivory {
+  background: var(--color-ivory);
+  color: var(--color-ink-on-copper);
+}
+
+.ivory:hover:not(:disabled) {
+  background: #fffaf2;
+}
+
+.small {
+  min-height: 32px;
+  padding: 0 var(--space-md);
+  font-size: 13px;
+}
+
+.iconOnly {
+  padding: 0;
+  width: 36px;
+  min-height: 36px;
+}
+
+.fullWidth {
+  width: 100%;
+}
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 600ms linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

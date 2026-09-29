@@ -15,6 +15,7 @@ import {
 } from "@expo-google-fonts/manrope";
 import { RootNavigator } from "./src/navigation/RootNavigator";
 import { useAuthStore } from "./src/stores/authStore";
+import { usePendingAccessRequestStore } from "./src/stores/pendingAccessRequestStore";
 import { colors } from "./src/theme";
 
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
@@ -58,13 +59,23 @@ export default function App() {
     Manrope_800ExtraBold,
   });
   const [authBootstrapped, setAuthBootstrapped] = useState(false);
+  const [pendingAccessRequestLoaded, setPendingAccessRequestLoaded] = useState(false);
   const bootstrap = useAuthStore((state) => state.bootstrap);
+  const loadPendingAccessRequest = usePendingAccessRequestStore((state) => state.load);
 
   useEffect(() => {
     bootstrap().finally(() => setAuthBootstrapped(true));
   }, [bootstrap]);
 
-  const appReady = fontsLoaded && authBootstrapped;
+  // Loaded in parallel with auth bootstrap, both gating appReady below —
+  // RootNavigator needs this already in the store the moment it first
+  // renders, so it can pick AuthNavigator's initial route without a
+  // Login-then-RequestStatus flash.
+  useEffect(() => {
+    loadPendingAccessRequest().finally(() => setPendingAccessRequestLoaded(true));
+  }, [loadPendingAccessRequest]);
+
+  const appReady = fontsLoaded && authBootstrapped && pendingAccessRequestLoaded;
 
   const onLayoutRootView = useCallback(() => {
     if (appReady) {

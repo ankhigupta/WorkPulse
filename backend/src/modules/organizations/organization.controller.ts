@@ -27,3 +27,9 @@ export async function update(req: Request, res: Response): Promise<void> {
   );
   res.status(200).json(organization);
 }
+
+export async function lookup(req: Request, res: Response): Promise<void> {
+  const { code } = req.validatedQuery as unknown as { code: string };
+  const organization = await organizationService.getOrganizationByJoinCode(code);
+  res.status(200).json(organization);
+}

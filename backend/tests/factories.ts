@@ -1,10 +1,12 @@
 import crypto from "node:crypto";
 import bcrypt from "bcrypt";
 import { prisma } from "../src/common/db/prisma";
-import { Role } from "../src/generated/prisma/enums";
+import { AccessRequestStatus, Role } from "../src/generated/prisma/enums";
 
 export async function createTestOrganization(name = "Test Org") {
-  return prisma.organization.create({ data: { name } });
+  return prisma.organization.create({
+    data: { name, joinCode: crypto.randomBytes(6).toString("hex").toUpperCase() },
+  });
 }
 
 interface CreateTestUserOptions {
@@ -165,4 +167,38 @@ export async function createTestAttendance(options: CreateTestAttendanceOptions)
       markedByUserId: options.markedByUserId,
     },
   });
+}
+
+interface CreateTestAccessRequestOptions {
+  organizationId: string;
+  email?: string;
+  password?: string;
+  requestedRole?: "EMPLOYEE" | "STORE_MANAGER";
+  requestedName?: string;
+  status?: AccessRequestStatus;
+}
+
+// Creates an AccessRequest row directly, bypassing the creation API — used
+// when a test needs an existing pending (or already-reviewed) request as a
+// fixture, not as the thing under test. Returns the raw statusToken
+// alongside the row since only its hash is ever persisted.
+export async function createTestAccessRequest(options: CreateTestAccessRequestOptions) {
+  const password = options.password ?? "Test1234!";
+  const passwordHash = await bcrypt.hash(password, 12);
+  const statusToken = crypto.randomBytes(32).toString("hex");
+  const statusTokenHash = crypto.createHash("sha256").update(statusToken).digest("hex");
+
+  const request = await prisma.accessRequest.create({
+    data: {
+      organizationId: options.organizationId,
+      email: options.email ?? `requester-${crypto.randomUUID()}@example.com`,
+      passwordHash,
+      requestedRole: options.requestedRole ?? Role.EMPLOYEE,
+      requestedName: options.requestedName ?? "Test Requester",
+      statusTokenHash,
+      status: options.status ?? AccessRequestStatus.PENDING,
+    },
+  });
+
+  return { request, statusToken, password };
 }

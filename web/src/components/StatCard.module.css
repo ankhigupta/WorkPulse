@@ -1,0 +1,82 @@
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-xl);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  min-width: 0;
+}
+
+.top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+.label {
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+}
+
+.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+
+.iconNeutral {
+  background: var(--color-elevated);
+  color: var(--color-text-secondary);
+}
+
+.iconSuccess {
+  background: rgba(95, 201, 138, 0.16);
+  color: var(--color-success);
+}
+
+.iconWarning {
+  background: rgba(233, 191, 79, 0.16);
+  color: var(--color-warning);
+}
+
+.iconError {
+  background: rgba(238, 111, 138, 0.16);
+  color: var(--color-error);
+}
+
+.iconInfo {
+  background: rgba(143, 176, 218, 0.16);
+  color: var(--color-info);
+}
+
+.valueRow {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+/* Big numbers stay in primary text — copper is a pointer, not a
+   highlighter (design system: "where copper goes"). */
+.value {
+  font-size: 30px;
+  line-height: 36px;
+  font-weight: var(--font-weight-extrabold);
+  letter-spacing: -0.5px;
+}
+
+.meta {
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+}

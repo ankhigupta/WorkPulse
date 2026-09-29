@@ -40,6 +40,12 @@ enum PayrollStatus {
   FINALIZED
 }
 
+enum AccessRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 // ─────────────────────────────────────────────────────────
 // Organization — tenant root
 // ─────────────────────────────────────────────────────────
@@ -51,8 +57,18 @@ model Organization {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users  User[]
-  stores Store[]
+  // Opaque, server-generated join code used for self-service access
+  // requests (see AccessRequest) — never derived from `id`/`name`, never
+  // sequential, never publicly listed. An admin retrieves their own via
+  // GET /organizations/:id; a requester exchanges it for {id, name} only
+  // via the public lookup endpoint. Backfilled for pre-existing rows in
+  // the migration; generated in application code for every org created
+  // after (see organization.service.ts's generateJoinCode).
+  joinCode String @unique
+
+  users          User[]
+  stores         Store[]
+  accessRequests AccessRequest[]
 }
 
 // ─────────────────────────────────────────────────────────
@@ -82,6 +98,9 @@ model User {
 
   requestedCorrections AttendanceCorrection[] @relation("CorrectionRequestedBy")
   reviewedCorrections  AttendanceCorrection[] @relation("CorrectionReviewedBy")
+
+  reviewedAccessRequests   AccessRequest[] @relation("AccessRequestReviewedBy")
+  createdFromAccessRequest AccessRequest?  @relation("AccessRequestCreatedUser")
 
   // Composite-FK target: lets Employee/Manager enforce that their
   // organizationId matches the organizationId of the User they belong to.
@@ -186,6 +205,72 @@ model Manager {
   @@unique([userId, organizationId])
   @@index([storeId])
   @@index([organizationId])
+}
+
+// ─────────────────────────────────────────────────────────
+// AccessRequest — self-service signup for STORE_MANAGER/EMPLOYEE,
+// pending Organization Admin approval
+// ─────────────────────────────────────────────────────────
+
+model AccessRequest {
+  id              String              @id @default(uuid()) @db.Uuid
+  organizationId  String              @db.Uuid
+  email           String
+  // Staging state only — no User exists yet. Copied verbatim (never
+  // re-hashed) into the new User.passwordHash on approval. Never
+  // returned by any endpoint.
+  passwordHash    String
+  // A hint the requester picked, never authorization — the approval
+  // endpoint takes its own explicit `role` input and never trusts this
+  // value. Only STORE_MANAGER/EMPLOYEE are ever accepted here; enforced
+  // at the schema/service layer, not by this column's type (still `Role`
+  // so it composes with existing enums/queries, but never widened to
+  // ORGANIZATION_ADMIN/SUPER_ADMIN in practice).
+  requestedRole   Role
+  // The requester's own stated name — a convenience default for
+  // Employee.name (or ignored for a Manager approval, which has no name
+  // field). The admin can override it at approval; never used as-is
+  // without going through that same admin-controlled approval step.
+  requestedName   String
+  status          AccessRequestStatus @default(PENDING)
+  // SHA-256 hash of the opaque statusToken returned once at creation —
+  // same reasoning as RefreshToken: this needs exact-match lookup by
+  // value on every status check, which bcrypt (salted per-call) can't
+  // support. Never the raw token, never logged.
+  statusTokenHash String
+
+  reviewedByUserId String?   @db.Uuid
+  reviewedAt       DateTime?
+  // Admin-only context for why a request was rejected — never returned
+  // by the requester-facing status endpoint (see access.request.service.ts).
+  rejectionReason  String?
+
+  // Set only on approval — the real account this request became. Kept
+  // permanently afterward as the audit trail; this row is never deleted
+  // or overwritten, matching AttendanceCorrection's established pattern.
+  createdUserId String? @unique @db.Uuid
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Plain FK to Organization, not composite — an AccessRequest has no
+  // Store/Employee/Manager of its own to keep consistent with yet, unlike
+  // Employee/Attendance/Payroll. reviewedBy/createdUser are actor/audit
+  // fields, deliberately plain FKs to User.id, same convention already
+  // documented for AttendanceCorrection's requestedBy/reviewedBy.
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  reviewedBy   User?        @relation("AccessRequestReviewedBy", fields: [reviewedByUserId], references: [id], onDelete: Restrict)
+  createdUser  User?        @relation("AccessRequestCreatedUser", fields: [createdUserId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, status])
+  @@index([email])
+  // Also enforced at the database level, outside this file: a partial
+  // unique index on (email, organizationId) WHERE status = 'PENDING' —
+  // Prisma's schema DSL can't express a WHERE-qualified unique index, so
+  // it's hand-added SQL in this model's migration
+  // (20260929152939_add_access_requests_and_join_code/migration.sql).
+  // At most one PENDING request per (email, org); APPROVED/REJECTED rows
+  // are excluded so history never blocks a new request.
 }
 
 // ─────────────────────────────────────────────────────────

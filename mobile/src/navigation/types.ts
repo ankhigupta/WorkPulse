@@ -1,5 +1,9 @@
 export type AuthStackParamList = {
   Login: undefined;
+  OrgSignup: undefined;
+  JoinOrganization: undefined;
+  RequestSubmitted: { organizationName: string };
+  RequestStatus: undefined;
 };
 
 export type AppTabParamList = {

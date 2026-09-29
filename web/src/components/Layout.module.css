@@ -1,0 +1,286 @@
+/* PageHeader */
+.pageHeader {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-xl);
+  margin-bottom: var(--space-xl);
+  flex-wrap: wrap;
+}
+
+.eyebrow {
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-xs);
+}
+
+.pageTitle {
+  font-size: 28px;
+  line-height: 36px;
+  font-weight: var(--font-weight-extrabold);
+  letter-spacing: -0.4px;
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+/* Avatar */
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  background: var(--color-elevated);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.4px;
+  flex-shrink: 0;
+}
+
+.avatarSmall {
+  width: 28px;
+  height: 28px;
+  font-size: 11px;
+}
+
+/* Filter bar */
+.filterBar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  margin-bottom: var(--space-lg);
+  flex-wrap: wrap;
+}
+
+.search {
+  position: relative;
+  flex: 1 1 280px;
+  min-width: 220px;
+}
+
+.searchInput {
+  width: 100%;
+  min-height: 42px;
+  padding: 0 var(--space-lg);
+  background: var(--color-surface);
+  border: 1px solid var(--color-input-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: 14px;
+}
+
+.searchInput::placeholder {
+  color: var(--color-text-muted);
+}
+
+.searchInput:focus {
+  outline: none;
+  border-color: var(--color-copper);
+}
+
+.filterSelect {
+  min-height: 42px;
+  padding: 0 var(--space-xxl) 0 var(--space-lg);
+  background: var(--color-surface);
+  border: 1px solid var(--color-input-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--color-text-secondary) 50%),
+    linear-gradient(135deg, var(--color-text-secondary) 50%, transparent 50%);
+  background-position: calc(100% - 18px) 19px, calc(100% - 13px) 19px;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+
+.filterSelect:focus {
+  outline: none;
+  border-color: var(--color-copper);
+}
+
+/* Segmented status tabs (reference: All / Active / Inactive pills) */
+.segmented {
+  display: inline-flex;
+  padding: 4px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  gap: 2px;
+}
+
+.segment {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 6px var(--space-md);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  font-weight: var(--font-weight-bold);
+  cursor: pointer;
+}
+
+.segment:hover {
+  color: var(--color-text);
+}
+
+/* Selected state is one of copper's designated homes. */
+.segmentActive {
+  background: var(--color-copper-deep);
+  color: var(--color-copper-light);
+}
+
+.segmentCount {
+  font-weight: var(--font-weight-medium);
+  opacity: 0.8;
+}
+
+/* Pagination */
+.pagination {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.pageButton {
+  min-width: 34px;
+  height: 34px;
+  padding: 0 var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  font-weight: var(--font-weight-bold);
+  cursor: pointer;
+}
+
+.pageButton:hover:not(:disabled) {
+  color: var(--color-text);
+  border-color: var(--color-input-border);
+}
+
+.pageButton:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.pageButtonActive {
+  background: var(--color-copper);
+  border-color: var(--color-copper);
+  color: var(--color-ink-on-copper);
+}
+
+.pageButtonActive:hover:not(:disabled) {
+  color: var(--color-ink-on-copper);
+}
+
+/* Cell helpers */
+.primaryCell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.cellTitle {
+  font-size: 14px;
+  font-weight: var(--font-weight-bold);
+  line-height: 20px;
+}
+
+.cellSub {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--color-text-secondary);
+}
+
+.mutedCell {
+  color: var(--color-text-secondary);
+}
+
+.numericCell {
+  font-variant-numeric: tabular-nums;
+}
+
+.rowActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+}
+
+/* Section grids */
+.statGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-lg);
+  margin-bottom: var(--space-xl);
+}
+
+.splitGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  gap: var(--space-lg);
+  margin-bottom: var(--space-xl);
+  align-items: start;
+}
+
+@media (max-width: 1280px) {
+  .statGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .splitGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.inlineMeta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+/* Progress bar — neutral/semantic only, never copper (design rule). */
+.progressTrack {
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--color-chart-track);
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--color-chart-neutral);
+}
+
+.progressSuccess {
+  background: var(--color-success);
+}
+
+.progressWarning {
+  background: var(--color-warning);
+}

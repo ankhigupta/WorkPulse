@@ -1,0 +1,19 @@
+.metaRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  margin-bottom: var(--space-xl);
+  flex-wrap: wrap;
+}
+
+.meta {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+.explainer {
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-md);
+}

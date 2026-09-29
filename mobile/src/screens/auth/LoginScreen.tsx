@@ -1,12 +1,16 @@
 import { useState } from "react";
 import { KeyboardAvoidingView, Platform, StyleSheet, View } from "react-native";
+import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { AppText, AppButton, AppInput, ScreenContainer } from "../../components";
 import { useAuthStore } from "../../stores/authStore";
 import { ApiError } from "../../types/api";
 import { EMAIL_PATTERN } from "../../utils/validation";
 import { colors, spacing } from "../../theme";
+import type { AuthStackParamList } from "../../navigation/types";
 
-export function LoginScreen() {
+type Props = NativeStackScreenProps<AuthStackParamList, "Login">;
+
+export function LoginScreen({ navigation }: Props) {
   const login = useAuthStore((state) => state.login);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -102,6 +106,11 @@ export function LoginScreen() {
         <AppText variant="caption" style={styles.footer}>
           Need access? Contact your organization admin.
         </AppText>
+
+        <View style={styles.linksRow}>
+          <AppButton label="Create an organization" onPress={() => navigation.navigate("OrgSignup")} variant="ghost" />
+          <AppButton label="Join an organization" onPress={() => navigation.navigate("JoinOrganization")} variant="ghost" />
+        </View>
       </KeyboardAvoidingView>
     </ScreenContainer>
   );
@@ -140,5 +149,9 @@ const styles = StyleSheet.create({
   footer: {
     textAlign: "center",
     marginTop: spacing.xl,
+  },
+  linksRow: {
+    marginTop: spacing.sm,
+    gap: spacing.xs,
   },
 });

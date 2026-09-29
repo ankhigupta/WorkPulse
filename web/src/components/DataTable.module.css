@@ -1,0 +1,70 @@
+.wrapper {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.scroll {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--color-surface);
+  text-align: left;
+  padding: var(--space-md) var(--space-xl);
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.table tbody td {
+  padding: var(--space-lg) var(--space-xl);
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: middle;
+  color: var(--color-text);
+}
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.table tbody tr:hover td {
+  background: var(--color-elevated);
+}
+
+.clickable tbody tr {
+  cursor: pointer;
+}
+
+.alignRight {
+  text-align: right;
+}
+
+.state {
+  padding: var(--space-xxl);
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-lg);
+  padding: var(--space-lg) var(--space-xl);
+  border-top: 1px solid var(--color-border);
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}

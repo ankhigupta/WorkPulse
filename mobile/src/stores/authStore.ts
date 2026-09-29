@@ -12,6 +12,7 @@ interface AuthState {
   /** Reads the persisted refresh token and hydrates a session on app start. */
   bootstrap: () => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
+  signupOrganization: (organizationName: string, email: string, password: string) => Promise<void>;
   /** Exchanges the stored refresh token for a new access token; returns it. */
   refresh: () => Promise<string>;
   logout: () => Promise<void>;
@@ -47,6 +48,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   login: async (email, password) => {
     const { accessToken, refreshToken, user } = await authApi.login(email, password);
+    await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, refreshToken);
+    set({ accessToken, user, status: "authenticated" });
+  },
+
+  // Same session-establishment shape as login — the backend returns an
+  // identical {accessToken, refreshToken, user} envelope, so this doesn't
+  // introduce a second kind of authenticated state.
+  signupOrganization: async (organizationName, email, password) => {
+    const { accessToken, refreshToken, user } = await authApi.signupOrganization(organizationName, email, password);
     await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, refreshToken);
     set({ accessToken, user, status: "authenticated" });
   },

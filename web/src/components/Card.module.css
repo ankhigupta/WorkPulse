@@ -1,0 +1,45 @@
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-xl);
+  box-shadow: var(--shadow-card);
+}
+
+.elevated {
+  background: var(--color-elevated);
+}
+
+/* The one card per screen allowed to carry copper — the payroll hero in
+   the reference. */
+.hero {
+  background: linear-gradient(135deg, var(--color-copper-deep) 0%, var(--color-surface) 70%);
+  border-color: #4a2e1f;
+}
+
+.flush {
+  padding: 0;
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-lg);
+  margin-bottom: var(--space-lg);
+}
+
+.title {
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: var(--font-weight-bold);
+}
+
+.subtitle {
+  margin-top: 2px;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: var(--font-weight-regular);
+  color: var(--color-text-secondary);
+}

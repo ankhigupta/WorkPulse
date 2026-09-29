@@ -1,0 +1,62 @@
+/*
+ * Source of truth: docs/design/Final — Charcoal + Burnished Copper — Design System@1x.png
+ * Values are identical to mobile/src/theme/* — one visual language, two
+ * independent implementations (CSS custom properties here, RN StyleSheet there).
+ *
+ * Copper rule, carried over verbatim from the design system sheet:
+ * copper is for the single primary action per screen, the active nav item,
+ * focus rings, branding and designated highlights. It never appears in a
+ * status badge, status dot or status bar.
+ */
+:root {
+  --color-background: #0d0d0c;
+  --color-surface: #161514;
+  --color-elevated: #1f1d1c;
+  --color-border: #2b2826;
+  --color-input-border: #37332f;
+
+  --color-text: #f3f1ee;
+  --color-text-secondary: #a7a19b;
+  --color-text-muted: #6f6a65;
+
+  --color-copper: #d2774a;
+  --color-copper-hover: #de8b60;
+  --color-copper-deep: #3a2419;
+  --color-copper-light: #eda27f;
+  --color-ink-on-copper: #1c0e07;
+
+  --color-ivory: #f4eee4;
+
+  --color-success: #5fc98a;
+  --color-warning: #e9bf4f;
+  --color-error: #ee6f8a;
+  --color-info: #8fb0da;
+
+  --color-chart-neutral: #8c857f;
+  --color-chart-track: #2a2725;
+
+  --font-family: "Manrope", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-bold: 700;
+  --font-weight-extrabold: 800;
+
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+  --space-xxl: 32px;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
+
+  --sidebar-width: 248px;
+  --sidebar-width-compact: 76px;
+  --topbar-height: 72px;
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-overlay: 0 24px 48px rgba(0, 0, 0, 0.55);
+}

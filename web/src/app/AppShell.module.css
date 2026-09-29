@@ -1,0 +1,314 @@
+.shell {
+  display: grid;
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  min-height: 100vh;
+}
+
+.sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+  padding: var(--space-xl) var(--space-lg);
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-border);
+  overflow-y: auto;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: 0 var(--space-sm);
+}
+
+/* The WorkPulse mark is one of copper's designated homes. */
+.brandMark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-sm);
+  background: var(--color-copper-deep);
+  color: var(--color-copper);
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.brandName {
+  font-size: 18px;
+  font-weight: var(--font-weight-extrabold);
+  letter-spacing: -0.2px;
+}
+
+.contextCard {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  background: var(--color-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  min-width: 0;
+}
+
+.contextMark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  font-size: 13px;
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+
+.contextText {
+  min-width: 0;
+}
+
+.contextName {
+  font-size: 14px;
+  font-weight: var(--font-weight-bold);
+  line-height: 20px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.contextMeta {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--color-text-secondary);
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+  flex: 1;
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.groupLabel {
+  padding: 0 var(--space-md);
+  margin-bottom: var(--space-sm);
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  font-weight: var(--font-weight-medium);
+  text-decoration: none;
+}
+
+.navItem:hover {
+  background: var(--color-elevated);
+  color: var(--color-text);
+}
+
+/* Active navigation is one of copper's designated homes. */
+.navItemActive {
+  background: var(--color-copper-deep);
+  color: var(--color-copper-light);
+  font-weight: var(--font-weight-bold);
+}
+
+.navItemActive:hover {
+  background: var(--color-copper-deep);
+  color: var(--color-copper-light);
+}
+
+.navIcon {
+  width: 18px;
+  display: inline-flex;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.navLabel {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.navBadge {
+  margin-left: auto;
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  background: rgba(233, 191, 79, 0.16);
+  color: var(--color-warning);
+  font-size: 11px;
+  font-weight: var(--font-weight-bold);
+  text-align: center;
+}
+
+.userCard {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  background: var(--color-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  color: inherit;
+  min-width: 0;
+}
+
+.userCard:hover {
+  border-color: var(--color-input-border);
+}
+
+.userText {
+  min-width: 0;
+}
+
+.userName {
+  font-size: 13px;
+  font-weight: var(--font-weight-bold);
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.userRole {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--color-text-secondary);
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.topBar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-xl);
+  min-height: var(--topbar-height);
+  padding: var(--space-lg) var(--space-xxl);
+  background: rgba(13, 13, 12, 0.88);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.topBarMeta {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+.topBarActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.content {
+  padding: var(--space-xxl);
+  flex: 1;
+}
+
+/* 1024–1280px: icon-capable sidebar, labels hidden, layout intact. */
+@media (max-width: 1280px) {
+  .shell {
+    grid-template-columns: var(--sidebar-width-compact) minmax(0, 1fr);
+  }
+
+  .brandName,
+  .contextText,
+  .userText,
+  .navLabel,
+  .groupLabel {
+    display: none;
+  }
+
+  .sidebar {
+    align-items: center;
+    padding: var(--space-xl) var(--space-md);
+  }
+
+  .navItem {
+    justify-content: center;
+  }
+
+  .navBadge {
+    display: none;
+  }
+
+  .contextCard,
+  .userCard {
+    justify-content: center;
+    padding: var(--space-sm);
+  }
+
+  .content,
+  .topBar {
+    padding-left: var(--space-xl);
+    padding-right: var(--space-xl);
+  }
+}
+
+/* Below 1024px the reference layout stops being honest — see SmallScreenNotice. */
+.smallScreen {
+  display: none;
+}
+
+@media (max-width: 1023px) {
+  .shell {
+    display: none;
+  }
+
+  .smallScreen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-md);
+    min-height: 100vh;
+    padding: var(--space-xxl);
+    text-align: center;
+  }
+}
+
+.smallScreenTitle {
+  font-size: 20px;
+  font-weight: var(--font-weight-bold);
+}
+
+.smallScreenBody {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+  max-width: 380px;
+}

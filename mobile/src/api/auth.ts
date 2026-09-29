@@ -6,6 +6,14 @@ export async function login(email: string, password: string): Promise<LoginRespo
   return data;
 }
 
+// Same response shape as login (accessToken/refreshToken/user) — creates
+// the Organization + first ORGANIZATION_ADMIN atomically and logs them
+// straight in, no approval step.
+export async function signupOrganization(organizationName: string, email: string, password: string): Promise<LoginResponse> {
+  const { data } = await apiClient.post<LoginResponse>("/auth/signup/organization", { organizationName, email, password });
+  return data;
+}
+
 export async function refreshTokens(refreshToken: string): Promise<RefreshResponse> {
   const { data } = await apiClient.post<RefreshResponse>("/auth/refresh", { refreshToken });
   return data;

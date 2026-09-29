@@ -1,0 +1,110 @@
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-lg);
+}
+
+.label {
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.control {
+  width: 100%;
+  min-height: 42px;
+  padding: 0 var(--space-lg);
+  background: var(--color-surface);
+  border: 1px solid var(--color-input-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: var(--font-weight-medium);
+}
+
+.control::placeholder {
+  color: var(--color-text-muted);
+}
+
+.control:focus {
+  outline: none;
+  border-color: var(--color-copper);
+}
+
+.control:disabled {
+  opacity: 0.6;
+}
+
+.invalid {
+  border-color: var(--color-error);
+}
+
+textarea.control {
+  min-height: 96px;
+  padding: var(--space-md) var(--space-lg);
+  line-height: 22px;
+  resize: vertical;
+}
+
+select.control {
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--color-text-secondary) 50%),
+    linear-gradient(135deg, var(--color-text-secondary) 50%, transparent 50%);
+  background-position: calc(100% - 18px) 19px, calc(100% - 13px) 19px;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: var(--space-xxl);
+  cursor: pointer;
+}
+
+.error {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--color-error);
+}
+
+.hint {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--color-text-muted);
+}
+
+.formError {
+  padding: var(--space-md) var(--space-lg);
+  margin-bottom: var(--space-lg);
+  border: 1px solid rgba(238, 111, 138, 0.35);
+  background: rgba(238, 111, 138, 0.1);
+  border-radius: var(--radius-md);
+  color: var(--color-error);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-lg);
+}
+
+.checkboxRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-lg);
+}
+
+.checkbox {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--color-copper);
+}
+
+.checkboxLabel {
+  font-size: 14px;
+  color: var(--color-text);
+}

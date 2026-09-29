@@ -22,3 +22,23 @@ export const loginRateLimiter = rateLimit({
     },
   },
 });
+
+// Same shape as loginRateLimiter, kept as its own instance (not reused)
+// since it guards a semantically different public action — a clearer
+// message, and a separate limit that can be tuned independently later.
+// Applied to every public onboarding endpoint that either creates state
+// or looks up an organization: signup, access-request creation, and the
+// join-code lookup a would-be requester might probe before submitting.
+export const publicOnboardingRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: () => env.NODE_ENV === "test",
+  message: {
+    error: {
+      code: "TOO_MANY_REQUESTS",
+      message: "Too many requests. Please try again later.",
+    },
+  },
+});

@@ -1,0 +1,61 @@
+@import "./theme/tokens.css";
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-background);
+  color: var(--color-text);
+  font-family: var(--font-family);
+  font-size: 15px;
+  line-height: 24px;
+  font-weight: var(--font-weight-medium);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4,
+p {
+  margin: 0;
+}
+
+button {
+  font-family: inherit;
+}
+
+a {
+  color: var(--color-copper-light);
+  text-decoration: none;
+}
+
+/* One focus treatment everywhere — copper, per the design system's
+   "where copper goes" rule. */
+:focus-visible {
+  outline: 2px solid var(--color-copper);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+::selection {
+  background: var(--color-copper-deep);
+  color: var(--color-text);
+}
+
+/* Scrollbars stay inside the charcoal palette rather than defaulting to
+   the browser's light chrome on a dark surface. */
+* {
+  scrollbar-color: var(--color-border) transparent;
+  scrollbar-width: thin;
+}

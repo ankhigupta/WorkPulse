@@ -9,6 +9,6 @@ const configuredApiUrl = process.env.EXPO_PUBLIC_API_URL;
 // is the documented alias back to it. Physical devices need EXPO_PUBLIC_API_URL
 // set explicitly to the host machine's LAN IP; there's no way to guess that.
 const defaultApiUrl =
-  Platform.OS === "android" ? "http://10.0.2.2:8000/api" : "http://localhost:8000/api";
-
+  Platform.OS === "android"? "http://10.0.2.2:8000/api": "http://10.110.153.175:8000/api";
+  
 export const API_BASE_URL = configuredApiUrl ?? defaultApiUrl;

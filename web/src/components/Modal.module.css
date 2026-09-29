@@ -1,0 +1,68 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-xl);
+  z-index: 50;
+}
+
+.dialog {
+  width: 100%;
+  max-width: 520px;
+  max-height: 90vh;
+  overflow-y: auto;
+  background: var(--color-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-overlay);
+  padding: var(--space-xl);
+}
+
+.wide {
+  max-width: 640px;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-lg);
+  margin-bottom: var(--space-xl);
+}
+
+.title {
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: var(--font-weight-bold);
+}
+
+.description {
+  margin-top: var(--space-xs);
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--color-text-secondary);
+}
+
+.close {
+  background: none;
+  border: none;
+  color: var(--color-text-secondary);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  padding: var(--space-xs);
+}
+
+.close:hover {
+  color: var(--color-text);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-md);
+  margin-top: var(--space-xl);
+}

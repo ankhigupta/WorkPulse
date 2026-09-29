@@ -6,6 +6,7 @@ import { Role } from "../../generated/prisma/enums";
 import * as organizationController from "./organization.controller";
 import {
   createOrganizationSchema,
+  organizationLookupQuerySchema,
   updateOrganizationAsOrgAdminSchema,
   updateOrganizationAsSuperAdminSchema,
 } from "./organization.schemas";
@@ -23,6 +24,10 @@ function validateOrganizationUpdate(req: Request, res: Response, next: NextFunct
 
   validate(schema)(req, res, next);
 }
+
+// Public — used by the access-request/signup flow. Registered before
+// "/:organizationId" so "/lookup" is never swallowed by that param route.
+router.get("/lookup", validate(organizationLookupQuerySchema, "query"), organizationController.lookup);
 
 router.post(
   "/",

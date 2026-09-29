@@ -1,0 +1,34 @@
+.viewport {
+  position: fixed;
+  right: var(--space-xl);
+  bottom: var(--space-xl);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  z-index: 60;
+}
+
+.toast {
+  min-width: 280px;
+  max-width: 420px;
+  padding: var(--space-md) var(--space-lg);
+  background: var(--color-elevated);
+  border: 1px solid var(--color-border);
+  border-left-width: 3px;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-overlay);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.success {
+  border-left-color: var(--color-success);
+}
+
+.error {
+  border-left-color: var(--color-error);
+}
+
+.info {
+  border-left-color: var(--color-info);
+}

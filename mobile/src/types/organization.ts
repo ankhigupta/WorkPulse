@@ -16,3 +16,10 @@ export interface Organization {
 export interface UpdateOrganizationInput {
   name?: string;
 }
+
+// GET /organizations/lookup?code=... — deliberately just {id, name}, an
+// explicit select on the backend, never the full Organization row.
+export interface OrganizationLookupResult {
+  id: string;
+  name: string;
+}

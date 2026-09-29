@@ -335,3 +335,68 @@ The "keep it local" reasoning in every prior ADR/doc note was specifically about
 ### Trade-offs
 
 - The app now has two coexisting patterns for "pick one item from a list" — four bespoke local copies (Attendance/Payroll/Payment/Manager) and one shared `SelectField` (Reports). This is an accepted, temporary inconsistency rather than a defect: a future cleanup milestone that's explicitly scoped to include it could migrate the older forms onto `SelectField`, but doing that unprompted here would have meant editing four completed modules' files for a ticket that only asked for Reports.
+
+---
+
+## ADR-014: Self-Service Onboarding — No `User` Until Approval, Join-Code Discovery, Requested Role Is Never Authorization
+
+**Status:** Accepted
+
+### Decision
+
+Three linked decisions, all part of the same feature:
+
+1. **`STORE_MANAGER`/`EMPLOYEE` self-signup never creates a `User` before an `ORGANIZATION_ADMIN` approves it.** The new `AccessRequest` table holds the requester's email, a bcrypt hash of their password, their stated name, and their requested role as pure staging state. Approval is what creates the real `User` (and `Employee`/`Manager`) — reusing the exact transactional shape `POST /api/employees`/`POST /api/managers` already use, just sourcing credentials from the request instead of the body. The stored password hash is copied verbatim into `User.passwordHash`; it is never re-hashed and the plaintext password is never stored at any point.
+2. **Organizations are discovered by an opaque join code, never a searchable directory.** `Organization.joinCode` is a unique, server-generated, cryptographically random string (Node's CSPRNG, an alphabet excluding visually-ambiguous characters), unrelated to the organization's `id` or `name`. The only public lookup (`GET /api/organizations/lookup?code=`) returns `{id, name}` for a valid, active code and an identical generic `404` for everything else — a bad code and a real-but-disabled organization's code are indistinguishable from the outside.
+3. **A requester's stated role is a hint, never authorization.** `AccessRequest.requestedRole` is stored and shown to the reviewing admin, but the approval endpoint takes its own explicit `role` field (structurally limited to `EMPLOYEE`/`STORE_MANAGER` — `ORGANIZATION_ADMIN`/`SUPER_ADMIN` aren't valid values for it at all) and that is what the new `User.role` becomes. An admin can approve a request into a different role than what was requested.
+
+### Reason
+
+**On (1):** every existing service in this codebase performs `const organizationId = auth.organizationId!` — a non-null assertion resting on the invariant "every non-`SUPER_ADMIN` role always has an organization." The alternative design (create a `User` immediately at request time, with `organizationId: null`, pending approval) would have broken that invariant for a whole new class of account, requiring an audit and new guard in every one of those call sites — Dashboard, Reports, Attendance, Payroll, Payments, Employees, Managers, Stores. Keeping the password as staging state on `AccessRequest` instead means this entire feature is additive: not one existing service needed to change to accommodate it.
+
+**On (2):** a directory of organization names searchable by an unauthenticated caller would let anyone enumerate which businesses use WorkPulse — real information disclosure for a B2B product where the customer list itself is sensitive. A join code shared out-of-band by the organization (analogous to a Slack workspace invite code) avoids this while still letting a legitimate requester self-identify the right organization before submitting.
+
+**On (3):** the ticket's core security requirement — "a requester must never be able to grant themselves a privileged role" — is only actually true if the field a requester controls is never the field that determines the outcome. Storing `requestedRole` as a hint and requiring the approval endpoint's own `role` input (not merely validating that the two match) makes the admin's decision the sole source of truth for what gets written, structurally, not just by convention.
+
+### Alternatives Considered
+
+- Creating the `User` at signup time with `organizationId: null` and a "pending" flag — rejected; the invariant-breaking cost across the whole existing codebase (detailed above) was judged far higher than the UX cost of "no session before approval."
+- A public, searchable organization directory — rejected outright as a real information-disclosure risk; not seriously considered as viable for this product.
+- Trusting `AccessRequest.requestedRole` directly at approval (with the admin only able to accept or reject the request as a whole, not change the role) — rejected; it would mean a rejection is the *only* way to correct a requester's mistaken or presumptuous role choice, forcing them to resubmit, instead of the admin simply approving into the right role in one step.
+- Bcrypt for the `statusToken` (matching how passwords are hashed) — rejected in favor of SHA-256, for the same reason `RefreshToken` already uses SHA-256 over bcrypt: a status check needs an exact-match lookup by value, which bcrypt's per-call salting can't support.
+
+### Trade-offs
+
+- A `STORE_MANAGER`/`EMPLOYEE` requester has no real session and cannot log in at all until approved — their only way to check progress is holding onto the `requestId`/`statusToken` pair returned once at submission, with no resend/recovery flow in V1. Accepted as the direct, worthwhile cost of keeping every existing service's authorization assumptions intact.
+- The same email can end up with simultaneous `PENDING` requests at two different organizations (allowed by design — see `docs/database.md`). If both are approved, whichever transaction commits second hits `User.email`'s global unique constraint and rolls back cleanly (verified by test, not just reasoned about) — the losing request reverts to `PENDING` rather than landing in a half-approved state, but that admin does have to notice and handle the resulting conflict manually; there's no cross-organization coordination to prevent it from happening in the first place.
+- Rejection reasons are admin-only in V1 (never shown to the requester) — a deliberate, conservative default per the ticket's own instruction, not a technical limitation; exposing them later would be a small, additive change to the status endpoint's response shape.
+---
+
+## ADR-015: Web Sessions Use an httpOnly Refresh Cookie, Additively — Mobile's JSON Contract Is Untouched
+
+### Decision
+
+1. The web client's refresh token is delivered and accepted as an **httpOnly, path-scoped cookie** (`workpulse_refresh_token`, `Path=/api/auth`), never in a response body and never readable by JavaScript. The access token stays in memory only (Zustand), and is the sole credential for every non-auth API call.
+2. This is **opt-in per request**, not a replacement. A client asks for cookie handling by sending `X-WorkPulse-Client: web`; without that header the endpoints behave exactly as before — `refreshToken` in the JSON body, no cookie set. `/auth/refresh` and `/auth/logout` resolve their token cookie-first, body-second.
+3. CSRF is defended by **Origin validation on exactly the endpoints that can be driven by an ambient browser credential** (`verifyWebOrigin` on the four `/auth` routes), plus `SameSite` on the cookie. CORS uses an exact-origin allowlist (`WEB_ORIGINS`) with `credentials: true`, never a wildcard.
+
+### Reason
+
+**On (1):** a browser is a materially more hostile storage environment than a native app. Mobile can put a refresh token in SecureStore (Keychain/Keystore) where no other code can read it; the browser equivalent — `localStorage` — is readable by any script that achieves XSS on the origin, turning a single injection into a persistent account takeover. An httpOnly cookie is the only storage the page's own JavaScript cannot exfiltrate, so it's the only option that doesn't weaken the existing security posture when moving to web.
+
+**On (2):** replacing the JSON refresh contract outright would have broken the shipped mobile app, which reads `refreshToken` from the response body and stores it itself. Keying the behavior off an explicit client header means the two contracts coexist with no branching in the service layer at all — only the controller chooses a response shape. Backend tests confirm both paths, including an explicit "mobile login is unchanged" case.
+
+**On (3):** CSRF only exists where credentials are *ambient*. Every WorkPulse route except the four `/auth` ones authenticates with a `Bearer` access token held in memory, which application code must attach deliberately — a cross-site page cannot produce one, so those routes are structurally immune and need no token plumbing. That leaves a small, well-defined surface where Origin checking is both sufficient (browsers forbid pages from forging `Origin`) and invisible to native clients, which send no `Origin` and carry no cookie. `SameSite` is a second layer rather than the only one, because a genuinely cross-site deployment may have to run `SameSite=None`.
+
+### Alternatives Considered
+
+- `localStorage` refresh token (zero backend work) — rejected; see (1). The convenience is not worth converting any XSS into a durable session compromise.
+- Replacing the body contract with cookies for all clients — rejected; it breaks the shipped mobile app for no benefit, since a native app gains nothing from cookies and loses SecureStore.
+- Double-submit CSRF tokens — rejected as redundant here. With only four cookie-authenticated endpoints, none of which return data a cross-origin page could read (CORS blocks that), Origin validation achieves the same outcome without adding a token to mint, store, rotate and verify.
+- Session-cookie authentication for *all* API routes — rejected; it would widen the CSRF surface from four endpoints to the entire API, requiring exactly the token plumbing avoided above, and would abandon the stateless Bearer model the mobile app already uses.
+
+### Trade-offs
+
+- Cookie attributes (`Secure`, `SameSite`, `Domain`) are now deployment-topology configuration rather than constants. A same-site deployment (`app.` + `api.` on one registrable domain) runs `SameSite=Lax`; a genuinely cross-site one must set `SameSite=None` **and** `Secure=true`. Getting this wrong silently breaks session restoration, so the defaults are the conservative same-site pair and `.env.example` documents the constraint.
+- The web app cannot read its own refresh token, so it cannot pre-emptively check expiry — it discovers an expired session by attempting a refresh and handling the 401. This is the intended shape (the interceptor already does exactly one refresh-and-retry), but it does mean one failed request per expiry.
+- `refreshSchema`/`logoutSchema` now accept an optional `refreshToken`, since a browser sends no body. A missing token is rejected as a 401 by the controller rather than a 422 by the schema — deliberate, so an expired browser session and a malformed request are indistinguishable to a caller.

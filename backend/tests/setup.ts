@@ -12,8 +12,10 @@ if (process.env.NODE_ENV !== "test" || !process.env.DATABASE_URL?.includes("work
 
 // Deterministic clean slate before every test. Deletion order respects the
 // RESTRICT foreign keys: RefreshToken/AttendanceCorrection/EmployeeNote/
-// Payroll/PaymentLedger -> Attendance -> Employee/Manager -> Store/User ->
-// Organization.
+// Payroll/PaymentLedger -> Attendance -> Employee/Manager -> Store ->
+// AccessRequest -> User -> Organization. AccessRequest has RESTRICT FKs to
+// both User (reviewedByUserId/createdUserId) and Organization, so it must
+// go after Store (independent of it) but before User/Organization.
 beforeEach(async () => {
   await prisma.refreshToken.deleteMany({});
   await prisma.attendanceCorrection.deleteMany({});
@@ -24,6 +26,7 @@ beforeEach(async () => {
   await prisma.employee.deleteMany({});
   await prisma.manager.deleteMany({});
   await prisma.store.deleteMany({});
+  await prisma.accessRequest.deleteMany({});
   await prisma.user.deleteMany({});
   await prisma.organization.deleteMany({});
 });

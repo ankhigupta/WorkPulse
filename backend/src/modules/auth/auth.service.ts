@@ -4,8 +4,14 @@ import jwt from "jsonwebtoken";
 import { prisma } from "../../common/db/prisma";
 import { env } from "../../common/config/env";
 import { logger } from "../../common/logger";
-import { NotFoundError, UnauthorizedError } from "../../common/errors";
-import type { Role } from "../../generated/prisma/enums";
+import { ConflictError, NotFoundError, UnauthorizedError } from "../../common/errors";
+import { Prisma } from "../../generated/prisma/client";
+import { Role } from "../../generated/prisma/enums";
+import { generateUniqueJoinCode } from "../organizations/organization.service";
+
+function isUniqueConstraintViolation(error: unknown): boolean {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+}
 
 const REFRESH_TOKEN_BYTES = 64;
 
@@ -87,6 +93,69 @@ export async function login(email: string, password: string): Promise<LoginResul
   });
 
   logger.info({ userId: user.id }, "Login succeeded");
+
+  return {
+    accessToken,
+    refreshToken: rawToken,
+    user: {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      organizationId: user.organizationId,
+    },
+  };
+}
+
+interface SignupOrganizationInput {
+  organizationName: string;
+  email: string;
+  password: string;
+}
+
+// Public, unapproved self-signup — creates a brand-new Organization and
+// its first ORGANIZATION_ADMIN together, atomically. No SUPER_ADMIN
+// approval step exists or is needed: this is the "customer/business owner
+// signs up directly" path from the onboarding model, distinct from
+// STORE_MANAGER/EMPLOYEE self-signup (accessRequest.service.ts), which
+// always requires an existing organization and an admin's approval.
+export async function signupOrganization(data: SignupOrganizationInput): Promise<LoginResult> {
+  const passwordHash = await bcrypt.hash(data.password, 12);
+
+  let user;
+  try {
+    user = await prisma.$transaction(async (tx) => {
+      const organization = await tx.organization.create({
+        data: { name: data.organizationName, joinCode: await generateUniqueJoinCode(tx) },
+      });
+
+      return tx.user.create({
+        data: {
+          email: data.email,
+          passwordHash,
+          role: Role.ORGANIZATION_ADMIN,
+          organizationId: organization.id,
+        },
+      });
+    });
+  } catch (error) {
+    if (isUniqueConstraintViolation(error)) {
+      throw new ConflictError("An account with this email already exists");
+    }
+    throw error;
+  }
+
+  const accessToken = signAccessToken({
+    sub: user.id,
+    role: user.role,
+    organizationId: user.organizationId,
+  });
+
+  const { rawToken, tokenHash, expiresAt } = buildRefreshTokenPayload();
+  await prisma.refreshToken.create({
+    data: { userId: user.id, tokenHash, expiresAt },
+  });
+
+  logger.info({ userId: user.id, organizationId: user.organizationId }, "Organization admin signup succeeded");
 
   return {
     accessToken,

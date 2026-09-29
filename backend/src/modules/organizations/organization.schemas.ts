@@ -1,5 +1,14 @@
 import { z } from "zod";
 
+// The alphabet/length is an implementation detail of generateUniqueJoinCode
+// (organization.service.ts) — this only validates shape, so a malformed
+// query string 422s cleanly instead of reaching a wasted database lookup.
+export const organizationLookupQuerySchema = z
+  .object({
+    code: z.string().trim().min(1).max(32),
+  })
+  .strict();
+
 export const createOrganizationSchema = z
   .object({
     name: z.string().trim().min(1).max(255),

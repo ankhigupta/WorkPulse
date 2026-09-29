@@ -1,6 +1,42 @@
 # API Reference
 
-This file is being filled in incrementally, module by module, rather than all at once — each milestone documents only what it built, to avoid blocking implementation on retroactively writing up every prior module. It currently documents the Employees (partial — the optional-login-account behavior only), Dashboard, and Reports endpoints.
+This file is being filled in incrementally, module by module, rather than all at once — each milestone documents only what it built, to avoid blocking implementation on retroactively writing up every prior module. It currently documents the Employees (partial — the optional-login-account behavior only), Dashboard, Reports, and Onboarding/Access Request endpoints.
+
+## Onboarding & Access Requests
+
+See `docs/database.md`'s "Self-Service Onboarding" section for the reasoning behind this design; this section is the endpoint reference.
+
+### `POST /api/auth/signup/organization`
+
+Public. Body: `{organizationName, email, password}` (`password` min 8 chars, same as every other password field in this API). Creates a new `Organization` + its first `ORGANIZATION_ADMIN` `User` atomically, and returns the exact same shape as `POST /api/auth/login` (`{accessToken, refreshToken, user}`) — the new admin is immediately logged in, no separate login step. No `SUPER_ADMIN` approval of any kind. Duplicate email → `409`, same message as every other "email already exists" case in this API. Rate-limited like login (`publicOnboardingRateLimiter`, skipped in test env).
+
+### `GET /api/organizations/lookup?code=...`
+
+Public. Returns `{id, name}` only, for a valid, active organization's join code. An invalid code and a real-but-inactive organization's code both produce the identical generic `404` — this endpoint can never confirm a code exists but is merely disabled. Not a directory: there is no way to search or list organizations without a code.
+
+### `POST /api/access-requests`
+
+Public. Body: `{organizationCode, email, password, name, requestedRole}` (`requestedRole`: `EMPLOYEE` or `STORE_MANAGER` only — the schema has no other valid value here). Resolves `organizationCode` via the same lookup as above (identical 404 for invalid/inactive). Creates a `PENDING` `AccessRequest` — **no `User` is created**. Returns `{requestId, statusToken}` once; the `statusToken` is never persisted or logged anywhere raw (only its SHA-256 hash is stored), so losing it means losing the ability to check status — there is no recovery/resend flow in V1. `409` if a `PENDING` request already exists for that exact `(email, organizationCode's organization)` pair (enforced by a database partial unique index, not just an application check — safe under real concurrent duplicate submissions). The same email may have simultaneous `PENDING` requests at *different* organizations.
+
+### `GET /api/access-requests/:requestId/status?token=...`
+
+Public. Requires both the path `requestId` and the query `token` (the raw `statusToken` from creation) — a wrong token or a wrong id produce the identical `404`, so this can't be used to enumerate valid request ids, and there is deliberately no way to look up a request by email alone. Returns `{status, organizationName}` only — never `email`, `requestedRole`, `requestedName`, or (a deliberate V1 default) the `rejectionReason`, which is admin-only context.
+
+### `GET /api/access-requests`
+
+`ORGANIZATION_ADMIN` only, scoped to the caller's own organization (mirrors every other org-scoped list in this API). Optional `?status=PENDING|APPROVED|REJECTED` filter. Never returns `passwordHash` or `statusTokenHash` — both are excluded by an explicit `select`, not fetched-then-stripped.
+
+### `POST /api/access-requests/:requestId/approve`
+
+`ORGANIZATION_ADMIN` only. A single atomic operation. Body is a discriminated union on `role`:
+- `{role: "EMPLOYEE", storeId, joinedAt, dailyWage, name?}` — `dailyWage` is required; `name` is optional and overrides the requester's own `requestedName` when supplied.
+- `{role: "STORE_MANAGER", storeId, joinedAt}` — no wage field accepted at all; supplying one is a `422` (`.strict()` schema), not a silently-ignored extra key.
+
+`role` here — not the stored `requestedRole` — is what the new `User.role` actually becomes; the admin's choice is authoritative, and `ORGANIZATION_ADMIN`/`SUPER_ADMIN` are not valid values for this field at all (a request for either is a `422` before any service code runs). `storeId` must belong to the admin's own organization (`404` otherwise, same "wrong tenant looks not-found" convention as every other store reference in this API). On success: creates `User` (role as specified, `passwordHash` copied verbatim from the request, never re-hashed) + `Employee`/`Manager`, links `AccessRequest.createdUserId` to the new `User`, marks the request `APPROVED`. A request that's already been approved or rejected → `409` (race-safe under real concurrent double-approval, and under an approve racing a reject — exactly one ever wins, matching `AttendanceCorrection`'s established concurrency pattern). Cross-organization request id → `404`.
+
+### `POST /api/access-requests/:requestId/reject`
+
+`ORGANIZATION_ADMIN` only. Body: `{reason?}` (optional, admin-only — never returned by the status endpoint above). Marks the request `REJECTED`; creates nothing. Final for that request record, but not final for the person — they may submit a new request at any time afterward (no cooldown in V1). Same `409`/`404`/concurrency behavior as approve.
 
 ## Employees — optional login accounts
 
