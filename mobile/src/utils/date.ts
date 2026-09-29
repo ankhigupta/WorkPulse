@@ -27,3 +27,19 @@ export function shiftDateOnly(value: string, deltaDays: number): string {
 export function isSameDateOnly(a: string, b: string): boolean {
   return a === b;
 }
+
+export function startOfMonth(value: string): string {
+  const [year, month] = value.split("-").map(Number);
+  return fromUtcMidnight(Date.UTC(year, month - 1, 1));
+}
+
+export function endOfMonth(value: string): string {
+  const [year, month] = value.split("-").map(Number);
+  // Day 0 of "next month" is the last day of this one.
+  return fromUtcMidnight(Date.UTC(year, month, 0));
+}
+
+export function addMonths(value: string, deltaMonths: number): string {
+  const [year, month, day] = value.split("-").map(Number);
+  return fromUtcMidnight(Date.UTC(year, month - 1 + deltaMonths, day));
+}

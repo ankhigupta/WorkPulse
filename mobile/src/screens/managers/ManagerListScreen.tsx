@@ -1,15 +1,14 @@
 import { useMemo, useState } from "react";
 import { FlatList, Pressable, RefreshControl, StyleSheet, View } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { AppText, AppInput, EmployeeCard, EmptyState, IconButton, LoadingState, ScreenContainer } from "../../components";
-import { useAuthStore } from "../../stores/authStore";
-import { useEmployeeList } from "../../hooks/useEmployees";
+import { AppText, AppInput, EmptyState, IconButton, LoadingState, ManagerCard, ScreenContainer } from "../../components";
+import { useManagerList } from "../../hooks/useManagers";
 import { useStoreList } from "../../hooks/useStores";
 import { ApiError } from "../../types/api";
 import { colors, radii, spacing } from "../../theme";
 import type { EmployeesStackParamList } from "../../navigation/types";
 
-type Props = NativeStackScreenProps<EmployeesStackParamList, "EmployeeList">;
+type Props = NativeStackScreenProps<EmployeesStackParamList, "ManagerList">;
 
 type StatusFilter = "all" | "active" | "inactive";
 
@@ -32,15 +31,15 @@ function FilterChip({ label, count, active, onPress }: { label: string; count: n
   );
 }
 
-export function EmployeeListScreen({ navigation }: Props) {
-  const role = useAuthStore((state) => state.user?.role);
-  const isAdmin = role === "ORGANIZATION_ADMIN";
-
+// This screen only ever mounts for ORGANIZATION_ADMIN — the entry point on
+// EmployeeListScreen is itself admin-gated, and /api/managers is
+// ORGANIZATION_ADMIN-only entirely, same as Payroll/Payments.
+export function ManagerListScreen({ navigation }: Props) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
 
-  const employeeQuery = useEmployeeList();
-  const storeQuery = useStoreList(isAdmin);
+  const managerQuery = useManagerList();
+  const storeQuery = useStoreList();
 
   const storeNameById = useMemo(() => {
     const map = new Map<string, string>();
@@ -49,42 +48,42 @@ export function EmployeeListScreen({ navigation }: Props) {
   }, [storeQuery.data]);
 
   const counts = useMemo(() => {
-    const employees = employeeQuery.data ?? [];
+    const managers = managerQuery.data ?? [];
     return {
-      all: employees.length,
-      active: employees.filter((e) => e.isActive).length,
-      inactive: employees.filter((e) => !e.isActive).length,
+      all: managers.length,
+      active: managers.filter((m) => m.isActive).length,
+      inactive: managers.filter((m) => !m.isActive).length,
     };
-  }, [employeeQuery.data]);
+  }, [managerQuery.data]);
 
-  const filteredEmployees = useMemo(() => {
-    const employees = employeeQuery.data ?? [];
+  const filteredManagers = useMemo(() => {
+    const managers = managerQuery.data ?? [];
     const query = search.trim().toLowerCase();
-    return employees.filter((employee) => {
-      if (statusFilter === "active" && !employee.isActive) return false;
-      if (statusFilter === "inactive" && employee.isActive) return false;
-      if (query && !employee.name.toLowerCase().includes(query)) return false;
+    return managers.filter((manager) => {
+      if (statusFilter === "active" && !manager.isActive) return false;
+      if (statusFilter === "inactive" && manager.isActive) return false;
+      if (query && !manager.user.email.toLowerCase().includes(query)) return false;
       return true;
     });
-  }, [employeeQuery.data, search, statusFilter]);
+  }, [managerQuery.data, search, statusFilter]);
 
-  if (employeeQuery.isPending) {
+  if (managerQuery.isPending) {
     return (
       <ScreenContainer>
-        <LoadingState message="Loading employees…" />
+        <LoadingState message="Loading managers…" />
       </ScreenContainer>
     );
   }
 
-  if (employeeQuery.isError) {
+  if (managerQuery.isError) {
     return (
       <ScreenContainer>
         <EmptyState
           icon="cloud-offline-outline"
-          title="Couldn't load employees"
-          message={employeeQuery.error instanceof ApiError ? employeeQuery.error.message : "Something went wrong. Please try again."}
+          title="Couldn't load managers"
+          message={managerQuery.error instanceof ApiError ? managerQuery.error.message : "Something went wrong. Please try again."}
           actionLabel="Retry"
-          onAction={() => employeeQuery.refetch()}
+          onAction={() => managerQuery.refetch()}
         />
       </ScreenContainer>
     );
@@ -96,32 +95,22 @@ export function EmployeeListScreen({ navigation }: Props) {
     <ScreenContainer>
       <View style={styles.header}>
         <View style={styles.headerText}>
-          <AppText variant="screenTitle">Employees</AppText>
+          <AppText variant="screenTitle">Managers</AppText>
           <AppText variant="bodySmall">
-            {totalCount} {totalCount === 1 ? "employee" : "employees"}
-            {isAdmin && storeQuery.data ? ` across ${storeQuery.data.length} ${storeQuery.data.length === 1 ? "store" : "stores"}` : ""}
+            {totalCount} {totalCount === 1 ? "manager" : "managers"}
           </AppText>
         </View>
-        {isAdmin ? (
-          <View style={styles.headerActions}>
-            <IconButton
-              icon="shield-checkmark-outline"
-              accessibilityLabel="View managers"
-              onPress={() => navigation.navigate("ManagerList")}
-            />
-            <IconButton
-              icon="add"
-              variant="primary"
-              accessibilityLabel="Create employee"
-              onPress={() => navigation.navigate("EmployeeCreate")}
-            />
-          </View>
-        ) : null}
+        <IconButton
+          icon="add"
+          variant="primary"
+          accessibilityLabel="Create manager"
+          onPress={() => navigation.navigate("ManagerCreate")}
+        />
       </View>
 
       <AppInput
         label="Search"
-        placeholder="Search by name"
+        placeholder="Search by email"
         value={search}
         onChangeText={setSearch}
         autoCapitalize="none"
@@ -145,37 +134,29 @@ export function EmployeeListScreen({ navigation }: Props) {
       </View>
 
       <FlatList
-        data={filteredEmployees}
+        data={filteredManagers}
         keyExtractor={(item) => item.id}
         style={styles.list}
         contentContainerStyle={styles.listContent}
         refreshControl={
-          <RefreshControl
-            refreshing={employeeQuery.isRefetching}
-            onRefresh={() => employeeQuery.refetch()}
-            tintColor={colors.primary}
-          />
+          <RefreshControl refreshing={managerQuery.isRefetching} onRefresh={() => managerQuery.refetch()} tintColor={colors.primary} />
         }
         renderItem={({ item }) => (
-          <EmployeeCard
-            employee={item}
-            storeName={isAdmin ? storeNameById.get(item.storeId) : undefined}
-            onPress={() => navigation.navigate("EmployeeDetail", { employeeId: item.id })}
+          <ManagerCard
+            manager={item}
+            storeName={storeNameById.get(item.storeId)}
+            onPress={() => navigation.navigate("ManagerDetail", { managerId: item.id })}
           />
         )}
         ListEmptyComponent={
           <EmptyState
-            icon="people-outline"
-            title={search || statusFilter !== "all" ? "No matching employees" : "No employees yet"}
+            icon="shield-checkmark-outline"
+            title={search || statusFilter !== "all" ? "No matching managers" : "No managers yet"}
             message={
-              search || statusFilter !== "all"
-                ? "Try a different name or filter."
-                : isAdmin
-                  ? "Create your first employee to get started."
-                  : "No employees have been added to your store yet."
+              search || statusFilter !== "all" ? "Try a different search or filter." : "Create your first store manager to get started."
             }
-            actionLabel={!search && statusFilter === "all" && isAdmin ? "Create employee" : undefined}
-            onAction={!search && statusFilter === "all" && isAdmin ? () => navigation.navigate("EmployeeCreate") : undefined}
+            actionLabel={!search && statusFilter === "all" ? "Create manager" : undefined}
+            onAction={!search && statusFilter === "all" ? () => navigation.navigate("ManagerCreate") : undefined}
           />
         }
       />
@@ -189,10 +170,6 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     justifyContent: "space-between",
     marginBottom: spacing.lg,
-  },
-  headerActions: {
-    flexDirection: "row",
-    gap: spacing.sm,
   },
   headerText: {
     flex: 1,

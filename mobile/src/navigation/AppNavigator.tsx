@@ -3,8 +3,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { HomeScreen } from "../screens/HomeScreen";
 import { AttendanceNavigator } from "./AttendanceNavigator";
 import { EmployeesNavigator } from "./EmployeesNavigator";
-import { PayrollScreen } from "../screens/PayrollScreen";
+import { PayrollNavigator } from "./PayrollNavigator";
 import { MoreScreen } from "../screens/MoreScreen";
+import { useAuthStore } from "../stores/authStore";
 import { colors } from "../theme";
 import type { AppTabParamList } from "./types";
 
@@ -21,6 +22,14 @@ const tabIcons: Record<keyof AppTabParamList, { filled: keyof typeof Ionicons.gl
 };
 
 export function AppNavigator() {
+  // Payroll is ORGANIZATION_ADMIN-only on the backend (the whole router is
+  // gated with requireRole(ORGANIZATION_ADMIN) — no STORE_MANAGER access
+  // at all, unlike Attendance/Employees). The tab itself is left out of
+  // the navigator entirely for any other role, rather than registered and
+  // then blocked inside — there's nothing behind it to show.
+  const role = useAuthStore((state) => state.user?.role);
+  const showPayroll = role === "ORGANIZATION_ADMIN";
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -43,7 +52,7 @@ export function AppNavigator() {
       <Tab.Screen name="Home" component={HomeScreen} />
       <Tab.Screen name="Attendance" component={AttendanceNavigator} />
       <Tab.Screen name="Employees" component={EmployeesNavigator} />
-      <Tab.Screen name="Payroll" component={PayrollScreen} />
+      {showPayroll ? <Tab.Screen name="Payroll" component={PayrollNavigator} /> : null}
       <Tab.Screen name="More" component={MoreScreen} />
     </Tab.Navigator>
   );

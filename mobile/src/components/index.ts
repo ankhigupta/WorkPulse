@@ -18,3 +18,8 @@ export { EmployeeForm } from "./EmployeeForm";
 export { AttendanceCard } from "./AttendanceCard";
 export { AttendanceDateSelector } from "./AttendanceDateSelector";
 export { AttendanceForm } from "./AttendanceForm";
+export { CorrectionCard } from "./CorrectionCard";
+export { PayrollCard } from "./PayrollCard";
+export { PaymentCard } from "./PaymentCard";
+export { ManagerCard } from "./ManagerCard";
+export { ManagerForm } from "./ManagerForm";

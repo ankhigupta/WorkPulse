@@ -87,12 +87,19 @@ export function AttendanceListScreen({ navigation }: Props) {
     <ScreenContainer>
       <View style={styles.header}>
         <AppText variant="screenTitle">Attendance</AppText>
-        <IconButton
-          icon="add"
-          variant="primary"
-          accessibilityLabel="Record attendance"
-          onPress={() => navigation.navigate("AttendanceCreate", { date })}
-        />
+        <View style={styles.headerActions}>
+          <IconButton
+            icon="git-pull-request-outline"
+            accessibilityLabel="View attendance corrections"
+            onPress={() => navigation.navigate("CorrectionsList")}
+          />
+          <IconButton
+            icon="add"
+            variant="primary"
+            accessibilityLabel="Record attendance"
+            onPress={() => navigation.navigate("AttendanceCreate", { date })}
+          />
+        </View>
       </View>
 
       <AttendanceDateSelector date={date} onChange={setDate} />
@@ -109,13 +116,24 @@ export function AttendanceListScreen({ navigation }: Props) {
             tintColor={colors.primary}
           />
         }
-        renderItem={({ item }) => (
-          <AttendanceCard
-            attendance={item}
-            employeeName={employeeNameById.get(item.employeeId) ?? "Unknown employee"}
-            storeName={isAdmin ? storeNameById.get(item.storeId) : undefined}
-          />
-        )}
+        renderItem={({ item }) => {
+          const employeeName = employeeNameById.get(item.employeeId) ?? "Unknown employee";
+          return (
+            <AttendanceCard
+              attendance={item}
+              employeeName={employeeName}
+              storeName={isAdmin ? storeNameById.get(item.storeId) : undefined}
+              onPress={() =>
+                navigation.navigate("CorrectionCreate", {
+                  attendanceId: item.id,
+                  employeeName,
+                  date: item.date,
+                  currentStatus: item.status,
+                })
+              }
+            />
+          );
+        }}
         ListEmptyComponent={
           <EmptyState
             icon="time-outline"
@@ -136,6 +154,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     marginBottom: spacing.lg,
+  },
+  headerActions: {
+    flexDirection: "row",
+    gap: spacing.sm,
   },
   list: {
     flex: 1,

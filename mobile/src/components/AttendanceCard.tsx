@@ -1,4 +1,4 @@
-import { StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import { AppText } from "./AppText";
 import { AppCard } from "./AppCard";
 import { Avatar } from "./Avatar";
@@ -11,6 +11,8 @@ interface AttendanceCardProps {
   attendance: Attendance;
   employeeName: string;
   storeName?: string;
+  /** When provided, the card becomes tappable (e.g. to request a correction). */
+  onPress?: () => void;
 }
 
 const methodLabel: Record<Attendance["method"], string> = {
@@ -21,10 +23,10 @@ const methodLabel: Record<Attendance["method"], string> = {
 // Absent uses the error tone deliberately — the design system's own
 // palette maps "Error / absent" to the same semantic color; it isn't
 // borrowed from a generic failure state.
-export function AttendanceCard({ attendance, employeeName, storeName }: AttendanceCardProps) {
+export function AttendanceCard({ attendance, employeeName, storeName, onPress }: AttendanceCardProps) {
   const metaParts = [methodLabel[attendance.method], storeName].filter(Boolean).join(" · ");
 
-  return (
+  const content = (
     <AppCard style={styles.card}>
       <View style={styles.row}>
         <Avatar name={employeeName} />
@@ -49,6 +51,14 @@ export function AttendanceCard({ attendance, employeeName, storeName }: Attendan
         </View>
       </View>
     </AppCard>
+  );
+
+  if (!onPress) return content;
+
+  return (
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`Request a correction for ${employeeName}`}>
+      {content}
+    </Pressable>
   );
 }
 

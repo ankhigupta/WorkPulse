@@ -231,3 +231,82 @@ Every one of these is the milestone ticket's own explicit guidance applied liter
 ### Trade-offs
 
 - An organization that starts using QR devices elsewhere would see those records correctly (method displays as "QR" on the card) but could never re-tag one as "MANUAL" or vice versa from the mobile app. Given no real workflow in this milestone would ever need that, this is judged a non-issue rather than a deferred gap.
+
+---
+
+## ADR-010: Mobile Corrections List Resolves Employee/Date via a Bounded 90-Day Join, Not Per-Record Fetches
+
+**Status:** Accepted
+
+### Decision
+
+`AttendanceCorrection`'s backend response (`correctionSelect` in `attendanceCorrection.service.ts`) contains only `attendanceId`, `organizationId`, `requestedByUserId`, `reviewedByUserId`, `proposedStatus`, `reason`, `status`, `reviewedAt`, and timestamps — no employee name, no attendance date, no original/current attendance status, and no reviewer name. Showing a useful corrections list requires all three: who the correction is about, what date, and what the record currently says.
+
+Rather than fetching `GET /api/attendance/:attendanceId` once per correction (real N+1 — a list of 50 corrections would be 50 extra requests), `CorrectionsListScreen` fetches `GET /api/attendance-corrections` and `GET /api/attendance` over the *same* trailing 90-day window (`startDate`/`endDate`, both endpoints already support these filters) and joins them client-side by `attendanceId` via a `Map`. This is exactly two bulk requests for the entire screen, regardless of how many corrections exist within the window.
+
+`requestedByUserId`/`reviewedByUserId` are never resolved to a name at all — there is no endpoint that maps an arbitrary user id to a display name (no `/api/users/:id`, and the two closest candidates, `/api/stores` and `/api/managers`, are unrelated and `ORGANIZATION_ADMIN`-only besides). The UI shows "Requested {time}" / "Reviewed {time}" without a name attached, rather than showing a raw, meaningless UUID.
+
+### Reason
+
+The milestone ticket was explicit that the list must avoid N+1 requests while still showing employee name/date/current-status "where provided by the API" — the bounded join is the only approach that satisfies both: real data, resolved correctly, without a per-row request.
+
+### Alternatives Considered
+
+- One `GET /api/attendance/:id` call per visible correction — rejected outright as the literal N+1 pattern the ticket forbade.
+- Showing corrections with no date/name context at all (just reason + status) — rejected; would have satisfied "avoid N+1" trivially but produced a far less useful screen than the ticket asked for, when a clean bulk-fetch alternative existed.
+- An unbounded correction list (no date window at all) — rejected; without *some* bound, the paired `GET /api/attendance` fetch needed for the join would have no bound either, and "fetch all attendance ever" doesn't scale as an organization accumulates history. 90 days was chosen as a generous-but-bounded default for a workflow that's inherently about *recent* discrepancies, not a historical archive.
+
+### Trade-offs
+
+- A correction whose underlying attendance record falls outside the trailing 90-day window won't resolve to an employee name or date — it falls back to a plain "Attendance record" label. This is accepted as a rare edge case (corrections are meant to be reviewed promptly, not discovered months later) rather than solved with an unbounded fetch. A future milestone could widen the window, add a proper date-range filter to the corrections screen, or — the more durable fix — have the backend's `correctionSelect` include a light nested `attendance` relation, removing the need for a client-side join entirely.
+
+---
+
+## ADR-011: The Payroll Bottom Tab Is Not Registered At All for Non-ORGANIZATION_ADMIN Roles
+
+**Status:** Accepted
+
+### Decision
+
+`AppNavigator` reads the authenticated user's role and conditionally omits the `<Tab.Screen name="Payroll">` entry entirely for anyone who isn't `ORGANIZATION_ADMIN` — the tab doesn't appear in the bottom bar, and the route doesn't exist in that session's navigator at all. This is different from every prior role restriction in this app: Employees and Attendance Corrections keep their tabs/screens visible for `STORE_MANAGER` and simply hide specific actions (Create/Edit buttons, Approve/Reject) that role can't perform. Payroll hides the whole entry point instead.
+
+### Reason
+
+The distinction tracks a real difference in the backend, not an arbitrary inconsistency: `payroll.routes.ts` gates its *entire* router with a single `router.use(authenticate, requireRole(Role.ORGANIZATION_ADMIN))` — there is no `STORE_MANAGER` capability anywhere in the Payroll API, not even read-only (contrast `attendance.routes.ts` and `employee.routes.ts`, both of which allow `STORE_MANAGER` through for at least GET). A `STORE_MANAGER` who landed on a Payroll tab would see nothing but a 403 on every possible action — there's no partial, legitimate view to show them, unlike Employees (they can view) or Corrections (they can view and create). Hiding the tab is the accurate reflection of "this role has zero standing in this module," not a UI choice made independently of the backend's own model.
+
+### Alternatives Considered
+
+- Keep the tab visible and show a 403/"not available" screen inside it for non-admins — rejected; this is strictly worse than not showing the tab at all; a tab that always leads to an error is a dead affordance, and the milestone ticket explicitly asked for "the smallest clean adjustment necessary so the UI does not present inaccessible payroll management."
+- A generic `role`-to-`allowedTabs` config table — rejected as unneeded structure for what is, today, a single boolean check (`role === "ORGANIZATION_ADMIN"`) directly mirroring the one route guard that actually exists; introducing a config layer ahead of a second real use case would be speculative.
+
+### Trade-offs
+
+- If a future role ever needs *partial* Payroll access (unlikely given PROJECT.md's dashboard descriptions, which only ever surface wage data to Organization Admin), this all-or-nothing tab visibility would need to change to the same pattern used elsewhere (visible tab, gated actions) — a small, localized change, not a rearchitecture.
+
+---
+
+## ADR-012: Payment `paidAt` Is Always Submitted as Noon UTC on the Selected Calendar Date
+
+**Status:** Accepted
+
+### Decision
+
+The mobile Record Payment form asks for a "Paid on" calendar date only — never a time of day. Whatever date is entered (today or backdated), the `paidAt` instant sent to `POST /api/payments` is always constructed as `${date}T12:00:00.000Z` — noon UTC on that date, every time, with no branching logic based on whether the date happens to be today.
+
+### Reason
+
+`PaymentLedger.paidAt` is a real timestamp on the backend (`z.coerce.date()`, no date-only constraint), but the product need here is simpler than that column: an admin recording a payment cares about *which day* it was paid, not the minute. Two tempting alternatives both introduce a real timezone bug class the milestone ticket explicitly warned about ("Do not silently convert a calendar date into the wrong instant"):
+
+- Defaulting to `new Date()` ("now") only works correctly for today's date — applying it to a backdated entry would silently attach today's clock time to a past date, which is meaningless and confusing in the payment history.
+- Defaulting to local midnight (`${date}T00:00:00` in the device's timezone) risks the well-established local-midnight problem this codebase has avoided everywhere else (see the UTC-safe date-only patterns throughout `utils/date.ts`/`utils/format.ts`): on a negative-UTC-offset device, local midnight can serialize to the *previous* UTC calendar date.
+
+Noon UTC sidesteps both: it's a single, unconditional rule (not two rules picked based on which date was entered), and it's far enough from any real-world timezone's day boundary (offsets run from UTC−12:00 to UTC+14:00) that the calendar date the backend actually stores can never disagree with the one the admin typed.
+
+### Alternatives Considered
+
+- A full date+time picker — rejected; no design reference calls for one, and the milestone ticket explicitly said a calendar-date-only UX is acceptable when time selection isn't required by the product.
+- Noon in the organization's local timezone instead of UTC — rejected; the mobile app has no concept of an organization's configured timezone anywhere (none of `User`/`Organization`/`Store` has a timezone field), so there is no such value to use even if this were otherwise preferable.
+
+### Trade-offs
+
+- Every payment's `paidAt` clock time reads as "noon" (in whatever timezone a future screen might display it in), which is a cosmetic artifact of this choice — nothing in the product currently displays or depends on that clock time being meaningful, only the calendar date, so this is accepted as a non-issue rather than a defect.

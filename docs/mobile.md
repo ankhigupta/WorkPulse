@@ -1,6 +1,6 @@
 # Mobile App
 
-Status: foundation (navigation, theme, auth, API client, Login screen), a real Home/Dashboard screen, a real Employees module (list/detail/create/edit), and a real Attendance module (list + manual create). See `docs/decisions.md` ADR-006 through ADR-009 for the architecture decisions behind it.
+Status: foundation (navigation, theme, auth, API client, Login screen), a real Home/Dashboard screen, a real Employees module (list/detail/create/edit), a real Managers module (list/detail/create/edit, `ORGANIZATION_ADMIN`-only), a real Attendance module (list + manual create), a real Attendance Corrections module (request/list/approve/reject), a real Payroll module (list/create/recalculate/finalize), and a real Payment Ledger module (list/record/balance) — Payroll and Payments both also `ORGANIZATION_ADMIN`-only. See `docs/decisions.md` ADR-006 through ADR-012 for the architecture decisions behind it.
 
 ## Stack
 
@@ -14,16 +14,16 @@ Run with Node 22 LTS (`nvm use 22`), not the backend's Node 24 — Expo/Metro co
 mobile/
   App.tsx                 — providers (React Query, Paper, SafeArea, NavigationContainer), font/auth bootstrap, splash hold
   src/
-    api/                   client.ts (axios instance + 401 refresh-and-retry), auth.ts, dashboard.ts, employees.ts, stores.ts, attendance.ts
-    components/            AppText, AppButton, AppInput, AppCard, ScreenContainer, SectionHeader, StatusBadge, Avatar, IconButton, Divider, LoadingState, EmptyState, MetricCard, DashboardSection, SummaryRow, EmployeeCard, EmployeeForm, AttendanceCard, AttendanceDateSelector, AttendanceForm
+    api/                   client.ts (axios instance + 401 refresh-and-retry), auth.ts, dashboard.ts, employees.ts, managers.ts, stores.ts, attendance.ts, attendanceCorrections.ts, payroll.ts, payments.ts
+    components/            AppText, AppButton, AppInput, AppCard, ScreenContainer, SectionHeader, StatusBadge, Avatar, IconButton, Divider, LoadingState, EmptyState, MetricCard, DashboardSection, SummaryRow, EmployeeCard, EmployeeForm, ManagerCard, ManagerForm, AttendanceCard, AttendanceDateSelector, AttendanceForm, CorrectionCard, PayrollCard, PaymentCard
     constants/config.ts    API_BASE_URL (EXPO_PUBLIC_API_URL, else localhost/10.0.2.2 by platform)
-    hooks/                 useDashboardSummary.ts, useEmployees.ts, useStores.ts, useAttendance.ts (list keyed by filters, create)
-    navigation/            AuthNavigator (Login), AppNavigator (bottom tabs), EmployeesNavigator, AttendanceNavigator (both nested stacks), RootNavigator, types.ts
-    screens/               LoginScreen, HomeScreen, employees/ (List/Detail/Create/Edit), attendance/ (List/Create), Payroll/More (placeholders)
+    hooks/                 useDashboardSummary.ts, useEmployees.ts, useManagers.ts, useStores.ts, useAttendance.ts, useAttendanceCorrections.ts, usePayroll.ts, usePayments.ts
+    navigation/            AuthNavigator (Login), AppNavigator (bottom tabs — Payroll conditionally registered, see ADR-011), EmployeesNavigator (nested stack — now also holds Manager list/detail/create/edit), AttendanceNavigator, PayrollNavigator (nested stacks — the latter now also holds Payments list/create + EmployeeBalance), RootNavigator, types.ts
+    screens/               LoginScreen, HomeScreen, employees/ (List/Detail/Create/Edit), managers/ (List/Detail/Create/Edit), attendance/ (List/Create, CorrectionsList, CorrectionCreate), payroll/ (List/Create), payments/ (List/Create, EmployeeBalance), More (placeholder)
     stores/authStore.ts    Zustand — accessToken/user in memory, refresh token in SecureStore only
     theme/                 colors.ts, typography.ts, spacing.ts, index.ts (static `theme` export)
-    types/                 auth.ts, employee.ts, store.ts, api.ts, dashboard.ts, attendance.ts
-    utils/                 format.ts (currency/date display, UTC-safe), validation.ts (email pattern, date-only shape check), date.ts (calendar-date arithmetic, UTC-safe)
+    types/                 auth.ts, employee.ts, manager.ts, store.ts, api.ts, dashboard.ts, attendance.ts, attendanceCorrection.ts, payroll.ts, payment.ts
+    utils/                 format.ts (currency/date/datetime display, UTC-safe), validation.ts (email pattern, date-only shape check, money-amount shape check), date.ts (calendar-date arithmetic, UTC-safe, incl. month bounds)
 ```
 
 ## Theme
@@ -67,6 +67,18 @@ Several elements in the Mobile Employees design reference aren't real backend fi
 
 `joinedAt` from the API is a full ISO datetime (`2026-01-15T00:00:00.000Z`), not a plain date — `Employee.joinedAt` is a raw Prisma `DateTime` column, never reformatted server-side the way Dashboard's `period` dates are. `utils/format.ts`'s `toDateOnlyString()` slices it to `YYYY-MM-DD` before it ever reaches a form field, so editing an employee doesn't leak a raw timestamp into the joined-date input.
 
+## Managers module
+
+Backed entirely by `GET/POST /api/managers` and `GET/PATCH /api/managers/:id` — no backend changes. `ORGANIZATION_ADMIN`-only end to end, same reasoning as Payroll/Payments (`manager.routes.ts` gates its whole router to that role) — so, unlike Employees, `EmployeeListScreen`'s "View managers" entry point (and the whole `ManagerList`/`ManagerDetail`/`ManagerCreate`/`ManagerEdit` screen set) only renders when `isAdmin` is true; `STORE_MANAGER` never sees it.
+
+**Manager has no `name` field at all — confirmed directly against `prisma/schema.prisma`, not assumed.** Unlike `Employee` (which gained a dedicated `name` field in ADR-005 specifically because an `Employee` can exist without a `User`), `Manager.userId` is required, not nullable — every manager has exactly one `User`, always. Because the two are genuinely 1:1 and mandatory here, showing `manager.user.email` as the manager's display identity isn't the same "Employee ≠ User" conflation ADR-005 warned against — for `Manager` specifically, the login email *is* the only real identity there is, so `ManagerCard`/`ManagerDetailScreen` show it plainly rather than inventing a name field that doesn't exist.
+
+**Create requires email + password together, always — never optional the way Employee's are.** `createManagerSchema` has no email/password-optional path at all (both fields are always required, unlike `createEmployeeSchema`'s "both or neither" refine), so `ManagerForm`'s create mode doesn't need — and doesn't have — that together-or-neither validation; it just requires both, matching the schema exactly.
+
+**No credential-change path exists, so the mobile app doesn't invent one.** `updateManagerSchema` accepts only `storeId`/`joinedAt`/`isActive` — no email, no password. `ManagerForm`'s edit mode has no email/password fields at all, and there is no "reset password" action anywhere in the Manager screens.
+
+Reuses the existing `EmployeesStackParamList`/`EmployeesNavigator` rather than a new tab or navigator — the same "sibling module, header-button entry point" pattern Corrections and Payments established, chosen because the milestone ticket itself frames Managers as an organization-admin-managed workforce record consistent with Employees, and `EmployeeListScreen` was already the natural, already-admin-checked place to add the entry point from.
+
 ## Attendance module
 
 Backed entirely by `GET /api/attendance` and `POST /api/attendance` — no backend changes. Server state lives in TanStack Query, key `["attendance", { date, ... }]` (`hooks/useAttendance.ts`'s `attendanceKey(params)`), so a different selected date is a genuinely different cached query rather than one shared key being overwritten — switching dates shows that date's own loading/cached state correctly. Create invalidates the whole `["attendance"]` prefix, covering every cached date at once.
@@ -79,6 +91,40 @@ Backed entirely by `GET /api/attendance` and `POST /api/attendance` — no backe
 
 Status is fixed to `PRESENT`/`ABSENT` (`AttendanceStatus` type has no other members) with `StatusBadge` tones `success`/`error` — the `error` tone for absent is a direct reuse of the design system's own "Error / absent" palette entry, not an improvised choice. See ADR-009 for the scope cuts made against the create form specifically (method, checkInAt, QR).
 
+## Attendance Corrections module
+
+Backed by `POST/GET /api/attendance-corrections` and `POST /api/attendance-corrections/:id/{approve,reject}` — no backend changes. The workflow is never bypassed: attendance status changes only ever happen as a side effect of an `ORGANIZATION_ADMIN` approving a correction (server-side, inside the backend's own transaction) — nothing in the mobile app calls `PATCH /api/attendance/:id` for a status change, because that endpoint doesn't even accept `status`.
+
+**Entry point is the Attendance list itself, not a standalone "pick an employee and date" form.** Tapping an `AttendanceCard` on `AttendanceListScreen` navigates straight to `CorrectionCreateScreen` with that record's `attendanceId`/employee name/date/current status already in hand — zero extra requests, and it's structurally impossible to request a correction for a non-existent attendance record since you can only ever start from a real one. The create form itself only asks for a reason: with exactly two possible statuses, once the current one is known there's exactly one valid "requested" value, so it's shown as a fact (current → requested, via two `StatusBadge`s) instead of a redundant picker.
+
+**Resolving employee name / attendance date / current status for the corrections list requires a bounded join — see ADR-010.** `AttendanceCorrection` only carries `attendanceId` (no employeeId, no date, no original status), so `CorrectionsListScreen` fetches `GET /api/attendance-corrections` and `GET /api/attendance` over the *same* trailing 90-day window and joins them client-side via a `Map`. This is two bulk requests for the whole screen, never one per correction — but a correction referencing attendance older than 90 days won't resolve to a name (falls back to "Attendance record"). Accepted trade-off, not a bug; see the ADR for why.
+
+Approving invalidates both `["attendanceCorrections"]` and `["attendance"]` (approval is the one action that changes `Attendance.status`); rejecting invalidates only `["attendanceCorrections"]`. Each `CorrectionCard` owns its own approve/reject mutations, so one card's in-flight action never disables another's, and a 409 ("already processed" — the backend's own concurrency guard) refetches the list instead of pretending the tap succeeded.
+
+## Payroll module
+
+Backed by `GET/POST /api/payroll` and `POST /api/payroll/:id/{recalculate,finalize}` — no backend changes. `ORGANIZATION_ADMIN`-only end to end: unlike Attendance/Employees (`STORE_MANAGER` gets read or partial access), the entire `/api/payroll` router is gated to `ORGANIZATION_ADMIN` on the backend, so the mobile app doesn't render the Payroll *tab at all* for any other role — see ADR-011, the first time this app removes a tab outright rather than hiding actions within one.
+
+**The client never calculates `totalWage`.** `totalDaysPresent`/`totalWage` only ever come from a server response (create/recalculate both return the freshly-calculated record); nothing in `PayrollCard`, the create form, or `hooks/usePayroll.ts` counts attendance or does wage arithmetic. `totalWage` stays a string end-to-end (`formatCurrency` from the Attendance/Employees milestones, reused as-is) — it's formatted for display, never parsed into a number for anything that feeds back into a calculation.
+
+**FINALIZED is enforced as immutable in the UI, matching the backend.** `PayrollCard` only renders Recalculate/Finalize for `status === "DRAFT"` — a `FINALIZED` record shows its `finalizedAt` timestamp and nothing else actionable. Finalize requires a native confirm dialog stating the record becomes locked; Recalculate doesn't (it's safely re-runnable, unlike finalize's one-way transition). Both mutations invalidate `["payroll"]` on error too, so a 409 (another action already finalized/processed the record — the backend's own conditional-update race guard) refetches the real state instead of leaving a stale enabled button.
+
+**Period presets ("This month"/"Last month") are a create-form convenience, not new business logic** — they just populate the same two plain `YYYY-MM-DD` text fields (`utils/date.ts`'s new `startOfMonth`/`endOfMonth`/`addMonths`, all UTC-safe) that a user could type by hand; the backend's `periodStart <= periodEnd` rule is mirrored client-side for a fast validation error, but the backend remains the real enforcement point.
+
+## Payment Ledger module
+
+Backed by `GET/POST /api/payments` and `GET /api/payments/balance/:employeeId` — no backend changes. `ORGANIZATION_ADMIN`-only, same as Payroll, reached from `PayrollListScreen` via a header button rather than its own bottom tab (the same "sibling module, header-button entry point" pattern Attendance Corrections established — see docs above and ADR-010).
+
+**Append-only, with nothing in the UI that suggests otherwise.** There is no Edit/Delete/Reverse action anywhere near a `PaymentCard`, matching the backend exactly — `payment.routes.ts` has no PATCH/PUT/DELETE route at all, not even one gated away by role.
+
+**The client never computes a balance.** `totalOwed`/`totalPaid`/`outstanding` are displayed exactly as `GET /payments/balance/:employeeId` returns them (all three pre-stringified by the backend) — nothing in `EmployeeBalanceScreen` sums payments or payroll locally. `outstanding` is explicitly labeled "(all time)" in the UI so it's never mistaken for a period-scoped figure, matching `docs/api.md`'s own note that Dashboard's equivalent figure "is always all-time, never period-filtered."
+
+**Overpayment is a real, expected error path, not an edge case to route around.** `POST /api/payments` rejects (409) a payment that would exceed the employee's outstanding balance, with a message that already states the attempted amount and the real limit (`payment.service.ts`'s `ConflictError`). The mobile form just surfaces that message verbatim via the same `submitError` pattern every other create form in this app uses — it never tries to pre-validate against a locally-fetched balance, compute a "safe" reduced amount, or retry.
+
+**`paidAt` is normalized to noon UTC on the selected calendar date — see ADR-012.** The create form only asks for a date ("Paid on"), not a time; rather than branching between "now" (today) and "local midnight" (a backdated date) — two different, error-prone rules — every submission uses the same one: noon UTC on whatever date was entered. That's far enough from any timezone's day boundary to guarantee the calendar date the backend stores always matches the one shown in the form.
+
+`amount` is the one financial field the backend requires as a plain JSON number (`z.number()`, not a coerced string) — the create form still treats it as text throughout (validated by `utils/validation.ts`'s new `isValidMoneyAmount`, mirroring the backend's exact positive/≤2-decimals/≤99999999.99 constraint) and converts it to a number exactly once, at submission, never for any local arithmetic.
+
 ## What's intentionally not here yet
 
-Attendance Corrections, QR attendance capture, payroll/payment screens, reports, manager management, employee notes, QR code display, offline sync, push notifications, employee invitation/account-linking — all separate future milestones. Payroll/More tabs are still `EmptyState` placeholders.
+QR attendance capture, reports, employee notes, QR code display, offline sync, push notifications, employee invitation/account-linking, manager password reset — all separate future milestones (or, for password reset, not supported by the backend at all yet). The More tab is still an `EmptyState` placeholder.

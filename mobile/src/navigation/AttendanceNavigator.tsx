@@ -1,6 +1,8 @@
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { AttendanceListScreen } from "../screens/attendance/AttendanceListScreen";
 import { AttendanceCreateScreen } from "../screens/attendance/AttendanceCreateScreen";
+import { CorrectionsListScreen } from "../screens/attendance/CorrectionsListScreen";
+import { CorrectionCreateScreen } from "../screens/attendance/CorrectionCreateScreen";
 import { colors } from "../theme";
 import type { AttendanceStackParamList } from "./types";
 
@@ -21,6 +23,8 @@ export function AttendanceNavigator() {
     >
       <Stack.Screen name="AttendanceList" component={AttendanceListScreen} options={{ headerShown: false }} />
       <Stack.Screen name="AttendanceCreate" component={AttendanceCreateScreen} options={{ title: "Record Attendance" }} />
+      <Stack.Screen name="CorrectionsList" component={CorrectionsListScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="CorrectionCreate" component={CorrectionCreateScreen} options={{ title: "Request Correction" }} />
     </Stack.Navigator>
   );
 }

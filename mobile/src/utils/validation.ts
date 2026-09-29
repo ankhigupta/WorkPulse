@@ -18,3 +18,17 @@ export function isValidDateOnly(value: string): boolean {
   const date = new Date(Date.UTC(year, month - 1, day));
   return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
 }
+
+// Mirrors backend/src/modules/payments/payment.schemas.ts's amount
+// constraint exactly: positive, at most 2 decimal places, at most
+// 99999999.99. A plain regex shape check plus a numeric range check —
+// never used to perform arithmetic, only to validate the text before it's
+// converted to the single JSON number the backend's schema requires.
+const MONEY_PATTERN = /^\d{1,8}(\.\d{1,2})?$/;
+const MAX_MONEY_AMOUNT = 99999999.99;
+
+export function isValidMoneyAmount(value: string): boolean {
+  if (!MONEY_PATTERN.test(value)) return false;
+  const numeric = Number(value);
+  return numeric > 0 && numeric <= MAX_MONEY_AMOUNT;
+}

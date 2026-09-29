@@ -43,6 +43,17 @@ export function formatTime(isoInstant: string): string {
   return new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" }).format(new Date(isoInstant));
 }
 
+// Also a genuine instant (createdAt/reviewedAt) — local time is correct
+// here for the same reason as formatTime above.
+export function formatDateTime(isoInstant: string): string {
+  return new Intl.DateTimeFormat("en-US", {
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(isoInstant));
+}
+
 export function formatPeriodLabel(startDate: string, endDate: string): string {
   const start = parseDateOnly(startDate);
   const end = parseDateOnly(endDate);

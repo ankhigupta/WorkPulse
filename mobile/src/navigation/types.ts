@@ -15,9 +15,28 @@ export type EmployeesStackParamList = {
   EmployeeDetail: { employeeId: string };
   EmployeeCreate: undefined;
   EmployeeEdit: { employeeId: string };
+  ManagerList: undefined;
+  ManagerDetail: { managerId: string };
+  ManagerCreate: undefined;
+  ManagerEdit: { managerId: string };
 };
 
 export type AttendanceStackParamList = {
   AttendanceList: undefined;
   AttendanceCreate: { date: string };
+  CorrectionsList: undefined;
+  CorrectionCreate: {
+    attendanceId: string;
+    employeeName: string;
+    date: string;
+    currentStatus: "PRESENT" | "ABSENT";
+  };
+};
+
+export type PayrollStackParamList = {
+  PayrollList: undefined;
+  PayrollCreate: undefined;
+  PaymentsList: undefined;
+  PaymentCreate: { employeeId?: string; employeeName?: string } | undefined;
+  EmployeeBalance: { employeeId: string; employeeName?: string };
 };
