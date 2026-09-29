@@ -111,3 +111,34 @@ Real employees at small businesses often have no phone, no email, and no smartph
 - Every service that previously assumed `Employee.user` exists had to be checked; in practice, only the Reports module actually depended on it (for `employeeName`, now `Employee.name` directly) — Attendance, Payroll, Payments, and EmployeeNotes never touched `Employee.user` at all, so the blast radius was smaller than it first appeared.
 - The migration backfills `name` from each existing employee's `User.email` as a one-time convenience value for rows that predate this change — documented explicitly as not a real name, not a long-term identity source. There were zero existing `Employee` rows in this database when the migration ran.
 - `POST /api/employees` now supports two shapes (with or without `email`+`password`) instead of one — validated via a Zod refinement requiring both fields together or neither, rather than two separate endpoints, to avoid the invitation/account-provisioning system explicitly out of scope for this milestone.
+
+---
+
+## ADR-006: Mobile Foundation — React Navigation over Expo Router, Custom Components over React Native Paper, SecureStore-Only Refresh Tokens
+
+**Status:** Accepted
+
+### Decision
+
+Three related choices made while scaffolding `mobile/`:
+
+1. **Navigation is React Navigation (native-stack + bottom-tabs), not Expo Router.** `create-expo-app` scaffolds its own `mobile/AGENTS.md` recommending Expo Router (file-based routes under `src/app/`) for new Expo projects. That's Expo's generic default advice, not this project's — the milestone ticket explicitly specifies React Navigation and a manually-defined Auth stack / bottom-tab app stack, matching the design reference's own navigation structure (Home / Attendance / Employees / Payroll / More).
+2. **Foundational UI components (`AppButton`, `AppInput`, `AppCard`, etc.) are hand-built on plain React Native primitives, not React Native Paper components.** Paper is still installed and wraps the app in a themed `PaperProvider`, so later screens can reach for its richer widgets (`Menu`, `Snackbar`, `DataTable`) without re-theming — but Paper's Material Design ripple/elevation defaults would fight the flat, custom Charcoal + Burnished Copper look the design reference establishes, and only ~12 primitives were needed for this milestone anyway.
+3. **The refresh token is the only piece of auth state persisted across app restarts, and it lives only in `expo-secure-store`.** The access token and hydrated user live in the Zustand store in memory only, rebuilt from the refresh token via `/api/auth/refresh` + `/api/auth/me` on cold start (`authStore.bootstrap()`). No token or user data ever touches AsyncStorage or a `zustand/persist` middleware, which would write to plain, unencrypted storage.
+
+### Reason
+
+1. The ticket is the authoritative instruction for this specific app; a scaffolding tool's generic template advice doesn't override it, and Expo Router's file-based-route convention would have meant a materially different (and unrequested) navigation architecture.
+2. Matching the finalized design pixel-for-pixel (exact colors, radii, spacing from the design system reference) is far more direct against unstyled RN primitives than against a component library with its own opinionated defaults to override everywhere.
+3. `Employee`s can exist without login (ADR-005), but every `User` who *does* log in still has a real password-backed session; the refresh token is a long-lived bearer credential and deserves Keychain/Keystore-backed storage, not just "not literally the password."
+
+### Alternatives Considered
+
+- Expo Router — rejected for this milestone; conflicts with the ticket's explicit React Navigation requirement.
+- Building every primitive on top of React Native Paper's components — rejected; kept Paper installed and themed for future use instead, since forcing every custom design detail through Paper's theming API would add friction for no benefit at this stage.
+- Persisting the access token too (for a snappier cold start) — rejected; the access token is short-lived (15m) and cheap to reacquire via one `/api/auth/refresh` call, so there's no real benefit to persisting it that would justify holding another bearer credential in storage.
+
+### Trade-offs
+
+- Cold start always costs one network round trip (`/api/auth/refresh` + `/api/auth/me`) before the app is usable, even if the access token from the last session technically hadn't expired yet.
+- Node 22 LTS is used for the mobile toolchain instead of the backend's Node 24, since Expo/Metro compatibility with a Node major that new hasn't been validated upstream yet — the two apps don't need matching Node versions, so this costs nothing beyond remembering to `nvm use 22` in `mobile/`.
