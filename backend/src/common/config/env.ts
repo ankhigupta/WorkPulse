@@ -40,6 +40,13 @@ const envSchema = z.object({
     .transform((value) => value === "true"),
   REFRESH_COOKIE_SAMESITE: z.enum(["lax", "strict", "none"]).default("lax"),
   REFRESH_COOKIE_DOMAIN: z.string().optional(),
+
+  // Consumed only by scripts/bootstrapSuperAdmin.ts — never read by the
+  // running server, and never wired into any request path. Optional here
+  // because most environments (including every test run) never set them;
+  // the bootstrap script itself is what requires their presence.
+  SUPER_ADMIN_EMAIL: z.string().trim().email().optional(),
+  SUPER_ADMIN_PASSWORD: z.string().min(8).optional(),
 });
 
 // Validating the environment

@@ -11,7 +11,8 @@
     "start": "node dist/server.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "bootstrap:super-admin": "tsx scripts/bootstrapSuperAdmin.ts"
   },
   "keywords": [],
   "author": "",

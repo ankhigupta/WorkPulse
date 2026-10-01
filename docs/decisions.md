@@ -400,3 +400,30 @@ Three linked decisions, all part of the same feature:
 - Cookie attributes (`Secure`, `SameSite`, `Domain`) are now deployment-topology configuration rather than constants. A same-site deployment (`app.` + `api.` on one registrable domain) runs `SameSite=Lax`; a genuinely cross-site one must set `SameSite=None` **and** `Secure=true`. Getting this wrong silently breaks session restoration, so the defaults are the conservative same-site pair and `.env.example` documents the constraint.
 - The web app cannot read its own refresh token, so it cannot pre-emptively check expiry — it discovers an expired session by attempting a refresh and handling the 401. This is the intended shape (the interceptor already does exactly one refresh-and-retry), but it does mean one failed request per expiry.
 - `refreshSchema`/`logoutSchema` now accept an optional `refreshToken`, since a browser sends no body. A missing token is rejected as a 401 by the controller rather than a 422 by the schema — deliberate, so an expired browser session and a malformed request are indistinguishable to a caller.
+
+---
+
+## ADR-016: SUPER_ADMIN Accounts Are Created Only by an Explicit, Idempotent Bootstrap Script
+
+### Decision
+
+There is no route, seed file, or startup hook that creates a `SUPER_ADMIN`. The only mechanism is `npm run bootstrap:super-admin`, which reads `SUPER_ADMIN_EMAIL`/`SUPER_ADMIN_PASSWORD` from the environment, hashes the password with the same `bcrypt` cost (12) as every other account, and creates a `User` with `role: SUPER_ADMIN, organizationId: null`. It is idempotent — re-running it against an email that's already `SUPER_ADMIN` is a no-op — and it refuses to touch an existing account of any other role rather than silently promoting it.
+
+### Reason
+
+A platform-owner account is qualitatively different from every other account this codebase creates: it has no tenant, no approval workflow, and no legitimate self-service path — there is no product reason a `SUPER_ADMIN` should ever come from a public request. Making it a deliberate, out-of-band command (not a server-startup side effect, not a public endpoint) means the only way one gets created is someone with shell/environment access on the deployment choosing to run it — the same trust boundary that already governs `DATABASE_URL` and the JWT secret.
+
+Idempotency matters because local setup steps get re-run — a fresh clone, a reset test database, a forgotten step re-triggered. A bootstrap that errors or duplicates on a second run is worse than useless during onboarding; matching the existing project's other idempotent-by-construction operations (join code generation, access-request approval) kept this consistent rather than inventing a new failure mode.
+
+Refusing to reassign an existing non-`SUPER_ADMIN` account's role (rather than "helpfully" upgrading it) closes the obvious misuse: if this ever ran against a real customer's email by mistake, it fails loudly instead of turning a tenant's `ORGANIZATION_ADMIN` into a platform owner.
+
+### Alternatives Considered
+
+- A Prisma seed script (`prisma db seed`) — rejected; seeds conventionally populate a whole dataset and often run automatically against a fresh database, which doesn't fit "one specific privileged account, created deliberately." A dedicated script's name says exactly what it does.
+- A temporary public signup endpoint, removed later — rejected outright; "temporary" security surface has a way of outliving the sprint that added it, and it's unnecessary when a script does the job with zero attack surface.
+- Auto-creating a `SUPER_ADMIN` on server startup if none exists — rejected; it would run on every environment including production, need a place to put freshly-generated credentials (logs? stdout?), and turn a deliberate action into an implicit one triggered by deploy timing.
+
+### Trade-offs
+
+- `SUPER_ADMIN_EMAIL`/`SUPER_ADMIN_PASSWORD` exist as environment variables purely for this script's benefit — the running server never reads them. They can be removed from `.env` immediately after running the bootstrap once; leaving them in has no ongoing effect since the operation is idempotent either way.
+- There's still no way to create a *second* `SUPER_ADMIN` except running the same script again with a different email — acceptable for a platform-owner role that's expected to be rare, not something needing a management UI.
