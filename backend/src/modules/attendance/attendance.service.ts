@@ -1,5 +1,5 @@
 import { prisma } from "../../common/db/prisma";
-import { ConflictError, NotFoundError } from "../../common/errors";
+import { ConflictError, ForbiddenError, NotFoundError } from "../../common/errors";
 import { getEmployeeForAuth, resolveManagerStoreId } from "../employees/employee.service";
 import { Prisma } from "../../generated/prisma/client";
 import { Role } from "../../generated/prisma/enums";
@@ -15,6 +15,8 @@ const attendanceSelect = {
   method: true,
   checkInAt: true,
   markedByUserId: true,
+  statusChangedByUserId: true,
+  statusChangedAt: true,
   createdAt: true,
   updatedAt: true,
 } as const;
@@ -136,11 +138,32 @@ export async function getAttendanceForAuth(auth: AuthContext, attendanceId: stri
   return attendance;
 }
 
+interface UpdateAttendanceInput {
+  method?: "QR" | "MANUAL";
+  status?: "PRESENT" | "ABSENT";
+}
+
+// The only two ways Attendance.status can ever change after creation: this
+// function (a direct ORGANIZATION_ADMIN edit) and
+// attendanceCorrection.service.ts's approveCorrection (an approved
+// correction). Both are a plain `update` against the one existing row —
+// neither this function nor that one ever calls `create`, so there is no
+// code path left that could produce a second Attendance row for the same
+// employee/date; the database's (employeeId, date) unique index is the
+// backstop if one ever did.
 export async function updateAttendanceForAuth(
   auth: AuthContext,
   attendanceId: string,
-  data: { method: "QR" | "MANUAL" },
+  data: UpdateAttendanceInput,
 ) {
+  // Route-level schema selection (attendance.routes.ts) already keeps a
+  // STORE_MANAGER from ever sending `status` — this is the service-layer
+  // backstop so that guarantee doesn't rest on routing alone, matching
+  // this codebase's "never rely only on frontend/route gating" discipline.
+  if (data.status !== undefined && auth.role !== Role.ORGANIZATION_ADMIN) {
+    throw new ForbiddenError("Only an organization admin can change attendance status directly");
+  }
+
   const where = await buildScopedWhere(auth, {});
   const existing = await prisma.attendance.findFirst({ where: { ...where, id: attendanceId } });
 
@@ -148,5 +171,14 @@ export async function updateAttendanceForAuth(
     throw new NotFoundError("Attendance not found");
   }
 
-  return prisma.attendance.update({ where: { id: attendanceId }, data, select: attendanceSelect });
+  const updateData: Prisma.AttendanceUpdateInput = { method: data.method };
+  if (data.status !== undefined) {
+    updateData.status = data.status;
+    // Audit trail for the direct-edit path — who changed the status and
+    // when, independent of markedByUserId (who originally recorded it).
+    updateData.statusChangedBy = { connect: { id: auth.userId } };
+    updateData.statusChangedAt = new Date();
+  }
+
+  return prisma.attendance.update({ where: { id: attendanceId }, data: updateData, select: attendanceSelect });
 }

@@ -193,6 +193,30 @@ describe("POST /api/attendance", () => {
     expect(res.status).toBe(409);
   });
 
+  it("concurrent duplicate attendance creation for the same employee/date: exactly one succeeds", async () => {
+    const org = await createTestOrganization();
+    const store = await createTestStore(org.id);
+    const { employee } = await createTestEmployee({ organizationId: org.id, storeId: store.id });
+    const token = await createOrgAdmin(org.id);
+
+    const [first, second] = await Promise.all([
+      request(app).post("/api/attendance").set("Authorization", `Bearer ${token}`).send(validPayload(employee.id)),
+      request(app)
+        .post("/api/attendance")
+        .set("Authorization", `Bearer ${token}`)
+        .send(validPayload(employee.id, { status: "ABSENT" })),
+    ]);
+
+    const statuses = [first.status, second.status].sort();
+    expect(statuses).toEqual([201, 409]);
+
+    const listRes = await request(app)
+      .get("/api/attendance")
+      .set("Authorization", `Bearer ${token}`)
+      .query({ employeeId: employee.id });
+    expect(listRes.body).toHaveLength(1);
+  });
+
   it("rejects a client-supplied organizationId (tenant escape attempt)", async () => {
     const org = await createTestOrganization();
     const otherOrg = await createTestOrganization();
@@ -498,7 +522,7 @@ describe("PATCH /api/attendance/:attendanceId", () => {
     expect(res.status).toBe(404);
   });
 
-  it("does not allow changing status via PATCH (unknown field, rejected)", async () => {
+  it("organization admin can change status directly via PATCH: PRESENT -> ABSENT", async () => {
     const org = await createTestOrganization();
     const store = await createTestStore(org.id);
     const { employee } = await createTestEmployee({ organizationId: org.id, storeId: store.id });
@@ -510,7 +534,113 @@ describe("PATCH /api/attendance/:attendanceId", () => {
       .set("Authorization", `Bearer ${token}`)
       .send({ status: "ABSENT" });
 
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe("ABSENT");
+    expect(res.body.id).toBe(createRes.body.id);
+  });
+
+  it("organization admin can change status directly via PATCH: ABSENT -> PRESENT", async () => {
+    const org = await createTestOrganization();
+    const store = await createTestStore(org.id);
+    const { employee } = await createTestEmployee({ organizationId: org.id, storeId: store.id });
+    const token = await createOrgAdmin(org.id);
+    const createRes = await request(app)
+      .post("/api/attendance")
+      .set("Authorization", `Bearer ${token}`)
+      .send(validPayload(employee.id, { status: "ABSENT" }));
+
+    const res = await request(app)
+      .patch(`/api/attendance/${createRes.body.id}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ status: "PRESENT" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe("PRESENT");
+  });
+
+  it("a direct status edit updates the existing row — no second Attendance row is created", async () => {
+    const org = await createTestOrganization();
+    const store = await createTestStore(org.id);
+    const { employee } = await createTestEmployee({ organizationId: org.id, storeId: store.id });
+    const token = await createOrgAdmin(org.id);
+    const createRes = await request(app).post("/api/attendance").set("Authorization", `Bearer ${token}`).send(validPayload(employee.id));
+
+    await request(app)
+      .patch(`/api/attendance/${createRes.body.id}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ status: "ABSENT" });
+
+    const listRes = await request(app)
+      .get("/api/attendance")
+      .set("Authorization", `Bearer ${token}`)
+      .query({ employeeId: employee.id });
+
+    expect(listRes.body).toHaveLength(1);
+    expect(listRes.body[0].id).toBe(createRes.body.id);
+    expect(listRes.body[0].status).toBe("ABSENT");
+  });
+
+  it("a direct status edit records who made it and when, without changing markedByUserId", async () => {
+    const org = await createTestOrganization();
+    const store = await createTestStore(org.id);
+    const { employee } = await createTestEmployee({ organizationId: org.id, storeId: store.id });
+    const token = await createOrgAdmin(org.id);
+    const createRes = await request(app).post("/api/attendance").set("Authorization", `Bearer ${token}`).send(validPayload(employee.id));
+
+    expect(createRes.body.statusChangedByUserId).toBeNull();
+    expect(createRes.body.statusChangedAt).toBeNull();
+
+    const res = await request(app)
+      .patch(`/api/attendance/${createRes.body.id}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ status: "ABSENT" });
+
+    expect(res.body.statusChangedByUserId).toEqual(expect.any(String));
+    expect(res.body.statusChangedAt).toEqual(expect.any(String));
+    expect(res.body.markedByUserId).toBe(createRes.body.markedByUserId);
+  });
+
+  it("store manager cannot change status directly — rejected as an unrecognized field (422)", async () => {
+    const org = await createTestOrganization();
+    const store = await createTestStore(org.id);
+    const { employee } = await createTestEmployee({ organizationId: org.id, storeId: store.id });
+    const adminToken = await createOrgAdmin(org.id);
+    const createRes = await request(app).post("/api/attendance").set("Authorization", `Bearer ${adminToken}`).send(validPayload(employee.id));
+
+    const { user, password } = await createTestManager({ organizationId: org.id, storeId: store.id });
+    const managerToken = await loginAs(user.email, password);
+
+    const res = await request(app)
+      .patch(`/api/attendance/${createRes.body.id}`)
+      .set("Authorization", `Bearer ${managerToken}`)
+      .send({ status: "ABSENT" });
+
     expect(res.status).toBe(422);
+
+    const unchanged = await request(app)
+      .get(`/api/attendance/${createRes.body.id}`)
+      .set("Authorization", `Bearer ${adminToken}`);
+    expect(unchanged.body.status).toBe("PRESENT");
+  });
+
+  it("a direct edit creates no AttendanceCorrection record", async () => {
+    const org = await createTestOrganization();
+    const store = await createTestStore(org.id);
+    const { employee } = await createTestEmployee({ organizationId: org.id, storeId: store.id });
+    const token = await createOrgAdmin(org.id);
+    const createRes = await request(app).post("/api/attendance").set("Authorization", `Bearer ${token}`).send(validPayload(employee.id));
+
+    await request(app)
+      .patch(`/api/attendance/${createRes.body.id}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ status: "ABSENT" });
+
+    const corrections = await request(app)
+      .get("/api/attendance-corrections")
+      .set("Authorization", `Bearer ${token}`)
+      .query({ attendanceId: createRes.body.id });
+
+    expect(corrections.body).toHaveLength(0);
   });
 
   it("does not allow changing employeeId, organizationId, storeId, or id", async () => {

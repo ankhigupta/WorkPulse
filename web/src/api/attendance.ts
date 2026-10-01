@@ -28,6 +28,17 @@ export async function createAttendance(input: CreateAttendanceInput): Promise<At
   return data;
 }
 
+// ORGANIZATION_ADMIN-only direct edit — updates the existing row in place.
+// The backend independently enforces the role; this is the only client
+// that ever sends `status` here (web has no STORE_MANAGER session at all).
+export async function updateAttendanceStatus(
+  attendanceId: string,
+  status: AttendanceStatus,
+): Promise<Attendance> {
+  const { data } = await apiClient.patch<Attendance>(`/attendance/${attendanceId}`, { status });
+  return data;
+}
+
 export interface ListCorrectionFilters {
   status?: CorrectionStatus;
   employeeId?: string;

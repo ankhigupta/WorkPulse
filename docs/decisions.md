@@ -427,3 +427,40 @@ Refusing to reassign an existing non-`SUPER_ADMIN` account's role (rather than "
 
 - `SUPER_ADMIN_EMAIL`/`SUPER_ADMIN_PASSWORD` exist as environment variables purely for this script's benefit — the running server never reads them. They can be removed from `.env` immediately after running the bootstrap once; leaving them in has no ongoing effect since the operation is idempotent either way.
 - There's still no way to create a *second* `SUPER_ADMIN` except running the same script again with a different email — acceptable for a platform-owner role that's expected to be rare, not something needing a management UI.
+
+---
+
+## ADR-017: Attendance Status Changes Are Always an `UPDATE` to the Existing Row — Direct Admin Edit and Correction Approval Share One Invariant
+
+### Decision
+
+1. `Attendance(employeeId, date)` has exactly one row, enforced by a database unique index — this was already true before this milestone and remains the single source of truth for the invariant, not application-level checking alone.
+2. There are now exactly two ways `Attendance.status` can change after creation, and both are a plain `UPDATE` against that one row: an `ORGANIZATION_ADMIN` direct edit (`PATCH /api/attendance/:id`, new) and an approved `AttendanceCorrection` (existing, unchanged in shape). Neither path, nor any other code path in the service layer, ever calls `create` to represent a status change.
+3. The direct-edit path is enforced admin-only at two independent layers: the route selects between two Zod schemas based on `req.auth.role` (STORE_MANAGER's omits `status` entirely — sending it is a `.strict()`-rejected unknown field, a 422, not a silent ignore), and the service function re-checks the role itself before writing, independent of which schema validated the request.
+4. A new partial unique index, `AttendanceCorrection(attendanceId) WHERE status = 'PENDING'`, caps pending corrections at one per attendance record — the database-level form of "no conflicting duplicate correction requests."
+5. A new `Attendance.statusChangedByUserId`/`statusChangedAt` pair records who most recently changed `status` and when, set by both paths above (never by creation itself), separate from `markedByUserId` (who originally recorded the row).
+
+### Reason
+
+A manually-discovered bug report described a duplicate `Attendance` row appearing after attempting to change an employee's status from PRESENT to ABSENT. Per the investigation requirement ("do not guess the root cause"), this was traced by inspection rather than assumed: the `(employeeId, date)` unique index and the service's `P2002`→`409 Conflict` handling were both already present in the codebase and verified live against the running database (`psql \d "Attendance"`) — a second `create` call for the same employee/date was already structurally rejected, not silently duplicated, and an existing test (`returns 409 for a duplicate employee/date attendance record`) already proved it.
+
+The actual defect was upstream of that: no `update` path for `status` existed at all. A prior comment in `attendance.schemas.ts` documented this as deliberate ("Attendance status changes go through the separate AttendanceCorrection workflow... direct status edits after creation aren't allowed"). With no edit action and no literal path from PRESENT to ABSENT for a record someone had already marked, the only tool available to "change" a record was resubmitting the create form — the wrong tool, reaching for `create` where `update` was needed, exactly the failure mode the bug report described. This decision closes that gap by giving `ORGANIZATION_ADMIN` (who PROJECT.md already grants direct authority over attendance) a real update path, while keeping the underlying single-row invariant exactly as strict as it already was.
+
+**On (3)'s two-layer enforcement**: this codebase's established discipline is that frontend/route gating is never the only thing standing between a role and an unauthorized mutation. The schema-selection layer alone would already stop a STORE_MANAGER request, but the service-layer check doesn't rest on that alone — matching the same "never rely on routing alone" reasoning already applied to `organization.routes.ts`'s per-role schema dispatch and to every tenant-scoping `buildScopedWhere` in this codebase.
+
+**On (4)**: without it, two corrections could be requested for the same attendance record (by different store visits, a retry, or a race), and if both were later approved, the second approval's `UPDATE` would simply overwrite the first with no record of the conflict. A partial unique index — the same pattern already established for `AccessRequest`'s "one PENDING per (email, organization)" — makes the conflict impossible to create in the first place, at the database, not just inconvenient to resolve after the fact.
+
+**On (5)**: `markedByUserId` answers "who recorded this attendance." It does not answer "who most recently decided what the status actually is," which is a different, newly-relevant question now that status can change twice (or more) after creation. Both mutation paths write the same pair of columns so the answer is consistent regardless of which path produced the current status.
+
+### Alternatives Considered
+
+- Leaving status changes exclusively in the correction workflow, with no direct-edit path at all — rejected; this is the status quo that produced the bug report's underlying confusion, and the ticket's own product requirement explicitly grants `ORGANIZATION_ADMIN` direct authority.
+- A single `updateAttendanceSchema` with `status` simply made optional for everyone, relying only on the service-layer role check to reject it for `STORE_MANAGER` — rejected in favor of the two-schema dispatch; a `STORE_MANAGER` sending `status` should get an immediate, specific 422 from validation, not a 403 from business logic three layers deeper for what is, from the schema's point of view, an entirely foreseeable unauthorized field.
+- Optimistic locking (a version column) on `Attendance` to guard concurrent direct edits — rejected as unnecessary scope; no other mutable record in this schema uses one, "last write wins" is the existing codebase-wide convention for conflicting updates, and the one case that actually needed race-proofing (duplicate corrections) is handled by the partial unique index instead.
+- An app-level `findFirst`-then-create check for duplicate pending corrections, without a database constraint — rejected; this codebase has already established (via `AccessRequest`) that an app-level check alone has a real TOCTOU race window under concurrent requests, closed only by pushing the constraint into the database itself.
+
+### Trade-offs
+
+- `statusChangedByUserId`/`statusChangedAt` are nullable and stay `NULL` for the (likely large) majority of rows whose status is never changed after creation — an intentional "only pay for what you use" choice over, say, a separate audit-log table, consistent with this codebase's existing minimal-schema bias (no adjustment-ledger table for Payroll either, per ADR history).
+- Two Zod schemas for one PATCH route (`updateAttendanceAsOrgAdminSchema` / `updateAttendanceAsStoreManagerSchema`) is marginally more ceremony than one shared schema — judged worth it for the "wrong field is caught at the validation boundary, not three layers in" property described above.
+- A direct `ORGANIZATION_ADMIN` edit can still change status while an unrelated `AttendanceCorrection` sits `PENDING` for the same record (the partial unique index only prevents a *second pending correction*, not an admin edit alongside one) — deliberate: admin authority over attendance isn't made contingent on whatever a store manager happens to have requested, and the admin can resolve the now-stale correction (reject it) afterward. Not treated as a gap; treated as admin authority working as intended.

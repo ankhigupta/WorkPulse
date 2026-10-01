@@ -282,6 +282,22 @@ export function useCreateAttendance() {
   });
 }
 
+// ORGANIZATION_ADMIN direct edit — updates the existing row. Reports share
+// the ["report", ...] key prefix, so a plain prefix invalidation of
+// "report" catches all four without listing them individually.
+export function useUpdateAttendanceStatus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ attendanceId, status }: { attendanceId: string; status: "PRESENT" | "ABSENT" }) =>
+      attendanceApi.updateAttendanceStatus(attendanceId, status),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["attendance"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["report"] });
+    },
+  });
+}
+
 export function useCreateEmployeeNote() {
   const queryClient = useQueryClient();
   return useMutation({

@@ -28,6 +28,12 @@ export type EmployeesStackParamList = {
 export type AttendanceStackParamList = {
   AttendanceList: undefined;
   AttendanceCreate: { date: string };
+  AttendanceEdit: {
+    attendanceId: string;
+    employeeName: string;
+    date: string;
+    currentStatus: "PRESENT" | "ABSENT";
+  };
   CorrectionsList: undefined;
   CorrectionCreate: {
     attendanceId: string;

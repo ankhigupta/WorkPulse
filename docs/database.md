@@ -82,6 +82,18 @@ The one genuine snapshot in the schema: `Attendance.storeId` is stored independe
 - `Organization.joinCode` — globally unique. Never derived from `id`/`name`, never sequential; generated server-side from Node's CSPRNG (`organization.service.ts`'s `generateUniqueJoinCode`), from an alphabet that excludes `0/O/1/I/L` for manual-entry legibility.
 - `AccessRequest(email, organizationId) WHERE status = 'PENDING'` — a **partial unique index**, hand-added as raw SQL in the migration (Prisma's schema DSL can't express a `WHERE`-qualified unique index). At most one pending request per email per organization; `APPROVED`/`REJECTED` history is excluded, so it never blocks a new request. The same email *can* have simultaneous `PENDING` requests at different organizations — this is allowed, not an oversight.
 - `AccessRequest.createdUserId` — unique and nullable: set exactly once, on approval, linking the request to the `User` it became.
+- `AttendanceCorrection(attendanceId) WHERE status = 'PENDING'` — a **partial unique index**, same reasoning and same hand-added-SQL-migration limitation as `AccessRequest`'s above. At most one pending correction per attendance record at a time; a resolved (`APPROVED`/`REJECTED`) correction never blocks a later, legitimate one.
+
+## Attendance status: who can change it, and how
+
+`Attendance(employeeId, date)`'s uniqueness (above) is what actually prevents a duplicate record — not application logic alone. `status` can change after creation through exactly two paths, both of which `UPDATE` the single existing row and neither of which ever `INSERT`s a new one:
+
+1. **`ORGANIZATION_ADMIN` direct edit** — `PATCH /api/attendance/:id` with `{ status }`. Enforced as admin-only at both the route (role-dispatched Zod schema, mirroring `organization.routes.ts`'s pattern) and the service layer (an explicit `ForbiddenError` backstop, independent of routing). No `AttendanceCorrection` is created.
+2. **An approved `AttendanceCorrection`** — `STORE_MANAGER` (within their store) or `ORGANIZATION_ADMIN` requests one, `ORGANIZATION_ADMIN` approves it; approval updates `Attendance.status` to `proposedStatus` inside the same transaction that marks the correction `APPROVED`.
+
+Both paths set `Attendance.statusChangedByUserId`/`statusChangedAt` — who most recently changed the status, and when, regardless of which of the two paths did it. This is separate from `markedByUserId` (who originally recorded the attendance at creation, never overwritten by a later status change).
+
+**Why this needed its own documentation**: a manually-discovered bug report described a duplicate `Attendance` row appearing after attempting to change an employee's status. Inspection (not assumption) found the `(employeeId, date)` unique index and the service's `P2002`→`409` handling were already correctly in place and verified live against the database — so a second `create` call was already rejected, not silently duplicated. The actual gap was structural: no `update` path for `status` existed at all before this milestone (a prior comment in `attendance.schemas.ts` documented this as deliberate), so the only tool available to "change" a record was the create form — exactly the wrong tool for the job. Both paths above are additive fixes closing that gap; see `docs/decisions.md` ADR-017.
 
 ## Employee ≠ User
 

@@ -12,6 +12,7 @@ import {
 } from "../../components";
 import { useAuthStore } from "../../stores/authStore";
 import { useAttendanceList } from "../../hooks/useAttendance";
+import { useCorrectionsList } from "../../hooks/useAttendanceCorrections";
 import { useEmployeeList } from "../../hooks/useEmployees";
 import { useStoreList } from "../../hooks/useStores";
 import { ApiError } from "../../types/api";
@@ -30,6 +31,15 @@ export function AttendanceListScreen({ navigation }: Props) {
   const attendanceQuery = useAttendanceList({ date });
   const employeeQuery = useEmployeeList();
   const storeQuery = useStoreList(isAdmin);
+  // Scoped to the viewed date only — just enough to know which rows
+  // already have a PENDING correction, not a full history fetch.
+  const pendingCorrectionsQuery = useCorrectionsList({ status: "PENDING", startDate: date, endDate: date });
+
+  const pendingAttendanceIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const correction of pendingCorrectionsQuery.data ?? []) ids.add(correction.attendanceId);
+    return ids;
+  }, [pendingCorrectionsQuery.data]);
 
   const employeeNameById = useMemo(() => {
     const map = new Map<string, string>();
@@ -118,19 +128,24 @@ export function AttendanceListScreen({ navigation }: Props) {
         }
         renderItem={({ item }) => {
           const employeeName = employeeNameById.get(item.employeeId) ?? "Unknown employee";
+          const correctionParams = {
+            attendanceId: item.id,
+            employeeName,
+            date: item.date,
+            currentStatus: item.status,
+          } as const;
+
           return (
             <AttendanceCard
               attendance={item}
               employeeName={employeeName}
               storeName={isAdmin ? storeNameById.get(item.storeId) : undefined}
-              onPress={() =>
-                navigation.navigate("CorrectionCreate", {
-                  attendanceId: item.id,
-                  employeeName,
-                  date: item.date,
-                  currentStatus: item.status,
-                })
-              }
+              pendingCorrection={pendingAttendanceIds.has(item.id)}
+              // ORGANIZATION_ADMIN edits directly; STORE_MANAGER requests a
+              // correction instead — never both, matching the backend's own
+              // role split (direct status PATCH is admin-only).
+              onEdit={isAdmin ? () => navigation.navigate("AttendanceEdit", correctionParams) : undefined}
+              onRequestCorrection={!isAdmin ? () => navigation.navigate("CorrectionCreate", correctionParams) : undefined}
             />
           );
         }}

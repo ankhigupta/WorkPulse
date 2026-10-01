@@ -20,6 +20,10 @@ const correctionSelect = {
   updatedAt: true,
 } as const;
 
+function isUniqueConstraintViolation(error: unknown): boolean {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+}
+
 interface CreateCorrectionInput {
   attendanceId: string;
   proposedStatus: "PRESENT" | "ABSENT";
@@ -33,19 +37,29 @@ export async function createCorrection(auth: AuthContext, data: CreateCorrection
   // found", exactly as GET /api/attendance/:attendanceId already behaves.
   const attendance = await getAttendanceForAuth(auth, data.attendanceId);
 
-  return prisma.attendanceCorrection.create({
-    data: {
-      attendanceId: attendance.id,
-      organizationId: attendance.organizationId,
-      requestedByUserId: auth.userId,
-      proposedStatus: data.proposedStatus,
-      reason: data.reason,
-      // status defaults to PENDING at the schema level — never accepted
-      // from the client, and this creation path never touches
-      // Attendance.status itself.
-    },
-    select: correctionSelect,
-  });
+  try {
+    return await prisma.attendanceCorrection.create({
+      data: {
+        attendanceId: attendance.id,
+        organizationId: attendance.organizationId,
+        requestedByUserId: auth.userId,
+        proposedStatus: data.proposedStatus,
+        reason: data.reason,
+        // status defaults to PENDING at the schema level — never accepted
+        // from the client, and this creation path never touches
+        // Attendance.status itself.
+      },
+      select: correctionSelect,
+    });
+  } catch (error) {
+    if (isUniqueConstraintViolation(error)) {
+      // The partial unique index on (attendanceId) WHERE status =
+      // 'PENDING' — see the migration and the schema comment on this
+      // model for why it can't be expressed in schema.prisma directly.
+      throw new ConflictError("A correction is already pending for this attendance record");
+    }
+    throw error;
+  }
 }
 
 export interface ListCorrectionFilters {
@@ -167,9 +181,18 @@ export async function approveCorrection(auth: AuthContext, correctionId: string)
       throw new ConflictError("This correction has already been processed");
     }
 
+    // An update to the one existing Attendance row — never a create.
+    // statusChangedBy/At are set here too, same as a direct
+    // ORGANIZATION_ADMIN edit (attendance.service.ts's
+    // updateAttendanceForAuth): whichever of the two paths most recently
+    // changed `status`, this is who and when, regardless of which one it was.
     await tx.attendance.update({
       where: { id: correction.attendanceId },
-      data: { status: correction.proposedStatus },
+      data: {
+        status: correction.proposedStatus,
+        statusChangedByUserId: auth.userId,
+        statusChangedAt: new Date(),
+      },
     });
 
     return tx.attendanceCorrection.findUniqueOrThrow({

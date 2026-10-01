@@ -194,6 +194,62 @@ describe("POST /api/attendance-corrections", () => {
 
     expect(res.status).toBe(403);
   });
+
+  it("rejects a second PENDING correction request for the same attendance record (409)", async () => {
+    const { admin, attendance } = await setupScenario();
+    await request(app).post("/api/attendance-corrections").set("Authorization", `Bearer ${admin.token}`).send(validPayload(attendance.id));
+
+    const res = await request(app)
+      .post("/api/attendance-corrections")
+      .set("Authorization", `Bearer ${admin.token}`)
+      .send(validPayload(attendance.id, { reason: "A different reason" }));
+
+    expect(res.status).toBe(409);
+
+    const count = await prisma.attendanceCorrection.count({ where: { attendanceId: attendance.id } });
+    expect(count).toBe(1);
+  });
+
+  it("concurrent duplicate correction requests for the same attendance record: exactly one succeeds", async () => {
+    const { admin, attendance } = await setupScenario();
+
+    const [first, second] = await Promise.all([
+      request(app).post("/api/attendance-corrections").set("Authorization", `Bearer ${admin.token}`).send(validPayload(attendance.id)),
+      request(app).post("/api/attendance-corrections").set("Authorization", `Bearer ${admin.token}`).send(validPayload(attendance.id)),
+    ]);
+
+    const statuses = [first.status, second.status].sort();
+    expect(statuses).toEqual([201, 409]);
+
+    const count = await prisma.attendanceCorrection.count({ where: { attendanceId: attendance.id } });
+    expect(count).toBe(1);
+  });
+
+  it("a new correction is allowed once the prior one is resolved (approved)", async () => {
+    const { admin, attendance } = await setupScenario();
+    const first = await request(app).post("/api/attendance-corrections").set("Authorization", `Bearer ${admin.token}`).send(validPayload(attendance.id));
+    await request(app).post(`/api/attendance-corrections/${first.body.id}/approve`).set("Authorization", `Bearer ${admin.token}`);
+
+    const second = await request(app)
+      .post("/api/attendance-corrections")
+      .set("Authorization", `Bearer ${admin.token}`)
+      .send(validPayload(attendance.id, { proposedStatus: "PRESENT" }));
+
+    expect(second.status).toBe(201);
+  });
+
+  it("a new correction is allowed once the prior one is resolved (rejected)", async () => {
+    const { admin, attendance } = await setupScenario();
+    const first = await request(app).post("/api/attendance-corrections").set("Authorization", `Bearer ${admin.token}`).send(validPayload(attendance.id));
+    await request(app).post(`/api/attendance-corrections/${first.body.id}/reject`).set("Authorization", `Bearer ${admin.token}`);
+
+    const second = await request(app)
+      .post("/api/attendance-corrections")
+      .set("Authorization", `Bearer ${admin.token}`)
+      .send(validPayload(attendance.id));
+
+    expect(second.status).toBe(201);
+  });
 });
 
 describe("GET /api/attendance-corrections", () => {
@@ -433,6 +489,32 @@ describe("POST /api/attendance-corrections/:correctionId/approve", () => {
 
     const updatedAttendance = await prisma.attendance.findUniqueOrThrow({ where: { id: attendance.id } });
     expect(updatedAttendance.status).toBe("ABSENT");
+  });
+
+  it("approval updates the existing Attendance row — no second row is created", async () => {
+    const { admin, employee, attendance } = await setupScenario();
+    const createRes = await request(app)
+      .post("/api/attendance-corrections")
+      .set("Authorization", `Bearer ${admin.token}`)
+      .send(validPayload(attendance.id, { proposedStatus: "ABSENT" }));
+
+    await request(app).post(`/api/attendance-corrections/${createRes.body.id}/approve`).set("Authorization", `Bearer ${admin.token}`);
+
+    const rows = await prisma.attendance.findMany({ where: { employeeId: employee.id } });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.id).toBe(attendance.id);
+    expect(rows[0]?.status).toBe("ABSENT");
+  });
+
+  it("approval records who changed the status and when, on the Attendance row itself", async () => {
+    const { admin, attendance } = await setupScenario();
+    const createRes = await request(app).post("/api/attendance-corrections").set("Authorization", `Bearer ${admin.token}`).send(validPayload(attendance.id));
+
+    await request(app).post(`/api/attendance-corrections/${createRes.body.id}/approve`).set("Authorization", `Bearer ${admin.token}`);
+
+    const updated = await prisma.attendance.findUniqueOrThrow({ where: { id: attendance.id } });
+    expect(updated.statusChangedByUserId).toBe(admin.userId);
+    expect(updated.statusChangedAt).not.toBeNull();
   });
 
   it("approval records reviewer and review timestamp correctly", async () => {

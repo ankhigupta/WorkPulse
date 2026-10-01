@@ -1,6 +1,6 @@
 # API Reference
 
-This file is being filled in incrementally, module by module, rather than all at once — each milestone documents only what it built, to avoid blocking implementation on retroactively writing up every prior module. It currently documents the Employees (partial — the optional-login-account behavior only), Dashboard, Reports, and Onboarding/Access Request endpoints.
+This file is being filled in incrementally, module by module, rather than all at once — each milestone documents only what it built, to avoid blocking implementation on retroactively writing up every prior module. It currently documents the Employees (partial — the optional-login-account behavior only), Attendance (partial — the direct status-edit behavior only), Dashboard, Reports, and Onboarding/Access Request endpoints.
 
 ## Onboarding & Access Requests
 
@@ -41,6 +41,19 @@ Public. Requires both the path `requestId` and the query `token` (the raw `statu
 ## Employees — optional login accounts
 
 `POST /api/employees` (`ORGANIZATION_ADMIN` only) requires `name`, `storeId`, `dailyWage`, `joinedAt`. `email`/`password` are **optional** and must be supplied together or not at all — see `docs/database.md`'s "Employee ≠ User" section for why. When omitted, the created `Employee` has `user: null` in every response and no `User` row is ever created for it. That employee still works normally everywhere else: `POST /api/attendance` (recorded by their `STORE_MANAGER`), `POST /api/payroll`, `POST /api/payments`, and every report all operate purely on `employeeId` — none of them touch or require `Employee.user`.
+
+## Attendance — direct status edit
+
+See `docs/database.md`'s "Attendance status: who can change it, and how" section for the full reasoning (ADR-017).
+
+### `PATCH /api/attendance/:attendanceId`
+
+The body schema depends on the caller's role, selected server-side from `req.auth.role` — never trusted from the client:
+
+- **`ORGANIZATION_ADMIN`**: `{ method?: "QR"|"MANUAL", status?: "PRESENT"|"ABSENT" }`, at least one field. `status` updates the existing row directly — no `AttendanceCorrection` is created, and no second `Attendance` row is ever created for this employee/date (the `(employeeId, date)` unique index guarantees that regardless). Sets `statusChangedByUserId`/`statusChangedAt` to the caller/now; `markedByUserId` (who originally recorded it) is untouched.
+- **`STORE_MANAGER`**: `{ method: "QR"|"MANUAL" }` only — `.strict()` means sending `status` here is a `422` (unrecognized field), not a silent ignore. Status changes for this role go through `POST /api/attendance-corrections` instead.
+
+Same tenant/store scoping as every other attendance endpoint: a record outside the caller's organization (or, for `STORE_MANAGER`, outside their assigned store) is `404`.
 
 ## Dashboard
 

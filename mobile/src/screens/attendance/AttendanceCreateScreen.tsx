@@ -1,7 +1,9 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { AttendanceForm, EmptyState, LoadingState, ScreenContainer } from "../../components";
+import { useAuthStore } from "../../stores/authStore";
 import { useCreateAttendance } from "../../hooks/useAttendance";
 import { useEmployeeList } from "../../hooks/useEmployees";
+import { useStoreList } from "../../hooks/useStores";
 import { ApiError } from "../../types/api";
 import type { AttendanceStackParamList } from "../../navigation/types";
 
@@ -9,12 +11,18 @@ type Props = NativeStackScreenProps<AttendanceStackParamList, "AttendanceCreate"
 
 export function AttendanceCreateScreen({ route, navigation }: Props) {
   const { date } = route.params;
+  const role = useAuthStore((state) => state.user?.role);
+  const isAdmin = role === "ORGANIZATION_ADMIN";
+
   // Reuses the same employee list query the Employees module and the
   // Attendance list already use — GET /api/employees is already scoped to
   // the caller's store server-side for STORE_MANAGER, so this picker can
   // never offer an employee outside their store without any extra
   // client-side filtering.
   const employeeQuery = useEmployeeList();
+  // GET /stores 403s for STORE_MANAGER — only fetched for the role that
+  // can actually call it, same guard useStoreList already documents.
+  const storeQuery = useStoreList(isAdmin);
   const createMutation = useCreateAttendance();
 
   if (employeeQuery.isPending) {
@@ -57,6 +65,8 @@ export function AttendanceCreateScreen({ route, navigation }: Props) {
     <ScreenContainer scroll>
       <AttendanceForm
         employees={employeeQuery.data}
+        isAdmin={isAdmin}
+        stores={storeQuery.data ?? []}
         initialDate={date}
         submitting={createMutation.isPending}
         submitError={submitError}

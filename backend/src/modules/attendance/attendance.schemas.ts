@@ -28,16 +28,31 @@ export const createAttendanceSchema = z
   })
   .strict();
 
-// Only `method` is editable here. Attendance status changes go through the
-// separate AttendanceCorrection request/approval workflow (a later
-// milestone) — PROJECT.md is explicit that direct status edits after
-// creation aren't allowed, even for the roles that could otherwise touch
-// this record.
-export const updateAttendanceSchema = z
+// STORE_MANAGER may only ever touch `method` — status changes for this
+// role go through the separate AttendanceCorrection request/approval
+// workflow. `.strict()` means a STORE_MANAGER sending `status` here gets a
+// 422 for an unrecognized field, not a silent ignore — the schema itself
+// is already half of "the backend must enforce only ORGANIZATION_ADMIN
+// can directly mutate status," not just the route-level role check.
+export const updateAttendanceAsStoreManagerSchema = z
   .object({
     method: attendanceMethod,
   })
   .strict();
+
+// ORGANIZATION_ADMIN has direct authority over attendance: `status` is
+// editable here (PRESENT <-> ABSENT), updating the existing row in place.
+// No AttendanceCorrection is created by this path — see
+// attendance.service.ts's updateAttendanceForAuth.
+export const updateAttendanceAsOrgAdminSchema = z
+  .object({
+    method: attendanceMethod.optional(),
+    status: attendanceStatus.optional(),
+  })
+  .strict()
+  .refine((data) => Object.keys(data).length > 0, {
+    message: "At least one field must be provided",
+  });
 
 export const listAttendanceQuerySchema = z
   .object({

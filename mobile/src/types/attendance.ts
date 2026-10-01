@@ -27,6 +27,11 @@ export interface Attendance {
   method: AttendanceMethod;
   checkInAt: string | null;
   markedByUserId: string;
+  // Set only once `status` has been changed after creation — by an
+  // ORGANIZATION_ADMIN direct edit or an approved AttendanceCorrection.
+  // Both null until either happens for the first time.
+  statusChangedByUserId: string | null;
+  statusChangedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -52,4 +57,11 @@ export interface CreateAttendanceInput {
   status: AttendanceStatus;
   method: AttendanceMethod;
   checkInAt?: string;
+}
+
+// ORGANIZATION_ADMIN only — mirrors updateAttendanceAsOrgAdminSchema's
+// `status` field. The backend independently enforces this is admin-only
+// even though only the admin-facing screen ever sends it.
+export interface UpdateAttendanceStatusInput {
+  status: AttendanceStatus;
 }

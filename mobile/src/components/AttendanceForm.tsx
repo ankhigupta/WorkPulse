@@ -7,7 +7,100 @@ import { AppInput } from "./AppInput";
 import { colors, radii, spacing, touchTarget } from "../theme";
 import { isValidDateOnly } from "../utils/validation";
 import type { Employee } from "../types/employee";
+import type { Store } from "../types/store";
 import type { AttendanceStatus, CreateAttendanceInput } from "../types/attendance";
+
+interface StorePickerFieldProps {
+  stores: Store[];
+  value: string | undefined;
+  onChange: (storeId: string | undefined) => void;
+}
+
+// ORGANIZATION_ADMIN only — "All stores" plus every store in the org. This
+// is purely a client-side filter on the Employee picker below it; the
+// backend never receives a storeId from this screen at all (createAttendance
+// derives storeId from the employee's own record), so there is nothing
+// here for an admin to use as an authorization shortcut even if they tried.
+function StorePickerField({ stores, value, onChange }: StorePickerFieldProps) {
+  const [open, setOpen] = useState(false);
+  const selected = stores.find((s) => s.id === value);
+
+  return (
+    <View style={styles.field}>
+      <AppText variant="label" style={styles.label}>
+        Store
+      </AppText>
+      <Pressable
+        onPress={() => setOpen(true)}
+        accessibilityRole="button"
+        accessibilityLabel="Select a store"
+        style={styles.pickerTrigger}
+      >
+        <AppText variant="body" style={!selected && styles.placeholder}>
+          {selected?.name ?? "All stores"}
+        </AppText>
+        <Ionicons name="chevron-down" size={18} color={colors.textSecondary} />
+      </Pressable>
+
+      <Modal visible={open} animationType="slide" transparent onRequestClose={() => setOpen(false)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setOpen(false)}>
+          <Pressable style={styles.modalSheet} onPress={(e) => e.stopPropagation()}>
+            <AppText variant="sectionTitle" style={styles.modalTitle}>
+              Select a store
+            </AppText>
+            <ScrollView>
+              <Pressable
+                onPress={() => {
+                  onChange(undefined);
+                  setOpen(false);
+                }}
+                style={styles.modalRow}
+                accessibilityRole="button"
+              >
+                <AppText variant="body">All stores</AppText>
+                {value === undefined ? <Ionicons name="checkmark" size={20} color={colors.primary} /> : null}
+              </Pressable>
+              {stores.map((store) => (
+                <Pressable
+                  key={store.id}
+                  onPress={() => {
+                    onChange(store.id);
+                    setOpen(false);
+                  }}
+                  style={styles.modalRow}
+                  accessibilityRole="button"
+                >
+                  <AppText variant="body">{store.name}</AppText>
+                  {store.id === value ? <Ionicons name="checkmark" size={20} color={colors.primary} /> : null}
+                </Pressable>
+              ))}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </View>
+  );
+}
+
+// STORE_MANAGER only — not a picker at all, since there's nothing to pick:
+// their store is fixed, and GET /stores 403s for this role anyway (so
+// there is no way for this screen to resolve and display the store's
+// actual name). A plain non-interactive field communicates "fixed" more
+// honestly than a disabled-looking dropdown would.
+function FixedStoreField() {
+  return (
+    <View style={styles.field}>
+      <AppText variant="label" style={styles.label}>
+        Store
+      </AppText>
+      <View style={styles.fixedField}>
+        <AppText variant="body" style={styles.fixedFieldText}>
+          Your assigned store
+        </AppText>
+      </View>
+    </View>
+  );
+}
 
 interface EmployeePickerFieldProps {
   employees: Employee[];
@@ -119,6 +212,11 @@ function StatusToggle({ value, onChange }: { value: AttendanceStatus; onChange: 
 
 interface AttendanceFormProps {
   employees: Employee[];
+  /** ORGANIZATION_ADMIN only — ignored (and the store picker hidden) for
+   *  STORE_MANAGER, whose store is fixed and whose employee list is
+   *  already server-scoped to it. */
+  isAdmin: boolean;
+  stores: Store[];
   initialDate: string;
   submitting: boolean;
   submitError?: string | null;
@@ -130,11 +228,35 @@ interface AttendanceFormProps {
 // checkInAt is omitted entirely: no design reference calls for it, and
 // leaving it out avoids introducing timezone-instant-input complexity
 // this milestone doesn't need.
-export function AttendanceForm({ employees, initialDate, submitting, submitError, onSubmit }: AttendanceFormProps) {
+//
+// Field order is Store, Employee, Status, Date — the store filter exists
+// purely to narrow the Employee picker below it; it is never sent to the
+// backend (createAttendance has no storeId input field at all), so it
+// can't function as an authorization boundary even if someone tried to
+// make it one. The real scoping already happens server-side: for
+// STORE_MANAGER, `employees` arrives from GET /api/employees pre-filtered
+// to their assigned store.
+export function AttendanceForm({ employees, isAdmin, stores, initialDate, submitting, submitError, onSubmit }: AttendanceFormProps) {
+  const [storeId, setStoreId] = useState<string | undefined>(undefined);
   const [employeeId, setEmployeeId] = useState("");
   const [date, setDate] = useState(initialDate);
   const [status, setStatus] = useState<AttendanceStatus>("PRESENT");
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const visibleEmployees = useMemo(() => {
+    if (!isAdmin || !storeId) return employees;
+    return employees.filter((employee) => employee.storeId === storeId);
+  }, [employees, isAdmin, storeId]);
+
+  // Switching the store filter clears the employee selection whenever it
+  // no longer belongs to the newly-chosen store, right at the point of
+  // the change — not as a reactive effect watching derived state.
+  function handleStoreChange(nextStoreId: string | undefined) {
+    setStoreId(nextStoreId);
+    if (!nextStoreId || !employeeId) return;
+    const stillVisible = employees.some((employee) => employee.id === employeeId && employee.storeId === nextStoreId);
+    if (!stillVisible) setEmployeeId("");
+  }
 
   function handleSubmit() {
     const nextErrors: Record<string, string> = {};
@@ -149,7 +271,15 @@ export function AttendanceForm({ employees, initialDate, submitting, submitError
 
   return (
     <View>
-      <EmployeePickerField employees={employees} value={employeeId} onChange={setEmployeeId} errorMessage={errors.employeeId} />
+      {isAdmin ? (
+        <StorePickerField stores={stores} value={storeId} onChange={handleStoreChange} />
+      ) : (
+        <FixedStoreField />
+      )}
+
+      <EmployeePickerField employees={visibleEmployees} value={employeeId} onChange={setEmployeeId} errorMessage={errors.employeeId} />
+
+      <StatusToggle value={status} onChange={setStatus} />
 
       <AppInput
         label="Date"
@@ -161,8 +291,6 @@ export function AttendanceForm({ employees, initialDate, submitting, submitError
         autoCapitalize="none"
         autoCorrect={false}
       />
-
-      <StatusToggle value={status} onChange={setStatus} />
 
       {submitError ? (
         <AppText variant="bodySmall" style={styles.formError}>
@@ -197,6 +325,18 @@ const styles = StyleSheet.create({
     borderColor: colors.error,
   },
   placeholder: {
+    color: colors.textSecondary,
+  },
+  fixedField: {
+    minHeight: touchTarget,
+    borderRadius: radii.medium,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceElevated,
+    paddingHorizontal: spacing.lg,
+    justifyContent: "center",
+  },
+  fixedFieldText: {
     color: colors.textSecondary,
   },
   errorText: {

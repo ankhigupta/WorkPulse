@@ -90,11 +90,12 @@ model User {
   employee Employee?
   manager  Manager?
 
-  markedAttendances Attendance[]
-  authoredNotes     EmployeeNote[]
-  recordedPayments  PaymentLedger[]
-  finalizedPayrolls Payroll[]
-  refreshTokens     RefreshToken[]
+  markedAttendances        Attendance[]    @relation("AttendanceMarkedBy")
+  statusChangedAttendances Attendance[]    @relation("AttendanceStatusChangedBy")
+  authoredNotes            EmployeeNote[]
+  recordedPayments         PaymentLedger[]
+  finalizedPayrolls        Payroll[]
+  refreshTokens            RefreshToken[]
 
   requestedCorrections AttendanceCorrection[] @relation("CorrectionRequestedBy")
   reviewedCorrections  AttendanceCorrection[] @relation("CorrectionReviewedBy")
@@ -261,9 +262,6 @@ model AccessRequest {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   reviewedBy   User?        @relation("AccessRequestReviewedBy", fields: [reviewedByUserId], references: [id], onDelete: Restrict)
   createdUser  User?        @relation("AccessRequestCreatedUser", fields: [createdUserId], references: [id], onDelete: Restrict)
-
-  @@index([organizationId, status])
-  @@index([email])
   // Also enforced at the database level, outside this file: a partial
   // unique index on (email, organizationId) WHERE status = 'PENDING' —
   // Prisma's schema DSL can't express a WHERE-qualified unique index, so
@@ -271,6 +269,9 @@ model AccessRequest {
   // (20260929152939_add_access_requests_and_join_code/migration.sql).
   // At most one PENDING request per (email, org); APPROVED/REJECTED rows
   // are excluded so history never blocks a new request.
+
+  @@index([organizationId, status])
+  @@index([email])
 }
 
 // ─────────────────────────────────────────────────────────
@@ -294,7 +295,10 @@ model EmployeeNote {
 }
 
 // ─────────────────────────────────────────────────────────
-// Attendance — daily attendance fact (immutable once created)
+// Attendance — daily attendance fact. The (employeeId, date) row itself is
+// permanent — status is not: ORGANIZATION_ADMIN may edit it directly, and
+// an approved AttendanceCorrection updates it too. Both paths UPDATE this
+// one row; neither ever creates a second row for the same employee/date.
 // ─────────────────────────────────────────────────────────
 
 model Attendance {
@@ -310,16 +314,29 @@ model Attendance {
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
 
+  // Who last changed `status` after creation, and when — set by either a
+  // direct ORGANIZATION_ADMIN edit or an approved correction (both are the
+  // only two ways `status` can change post-creation). Null until either
+  // happens. A plain FK to User.id, not composite — same actor/audit
+  // convention as markedByUserId and every other reviewedBy/finalizedBy
+  // field in this schema, deliberately not composite.
+  statusChangedByUserId String?   @db.Uuid
+  statusChangedAt       DateTime?
+
   // storeId is intentionally independent of employee.storeId: it records
   // where the attendance actually happened, so it stays correct even after
   // the employee is later reassigned to a different store.
-  employee Employee @relation(fields: [employeeId, organizationId], references: [id, organizationId], onDelete: Restrict)
-  store    Store    @relation(fields: [storeId, organizationId], references: [id, organizationId], onDelete: Restrict)
-  markedBy User     @relation(fields: [markedByUserId], references: [id], onDelete: Restrict)
+  employee        Employee @relation(fields: [employeeId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  store           Store    @relation(fields: [storeId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  markedBy        User     @relation("AttendanceMarkedBy", fields: [markedByUserId], references: [id], onDelete: Restrict)
+  statusChangedBy User?    @relation("AttendanceStatusChangedBy", fields: [statusChangedByUserId], references: [id], onDelete: Restrict)
 
   corrections AttendanceCorrection[]
 
-  // One attendance record per employee per calendar day.
+  // One attendance record per employee per calendar day — the invariant a
+  // duplicate-row bug would violate. Enforced here, at the database, not
+  // just in application code: createAttendance's P2002 catch exists
+  // because of this index, not instead of it.
   @@unique([employeeId, date])
   // Composite-FK target: lets AttendanceCorrection enforce that its
   // organizationId matches the Attendance row it corrects.
@@ -351,6 +368,12 @@ model AttendanceCorrection {
   attendance  Attendance @relation(fields: [attendanceId, organizationId], references: [id, organizationId], onDelete: Restrict)
   requestedBy User       @relation("CorrectionRequestedBy", fields: [requestedByUserId], references: [id], onDelete: Restrict)
   reviewedBy  User?      @relation("CorrectionReviewedBy", fields: [reviewedByUserId], references: [id], onDelete: Restrict)
+  // Also enforced at the database level, outside this file: a partial
+  // unique index on (attendanceId) WHERE status = 'PENDING' — Prisma's
+  // schema DSL can't express a WHERE-qualified unique index, same
+  // limitation documented on AccessRequest above. At most one PENDING
+  // correction per attendance record at a time; APPROVED/REJECTED rows
+  // are excluded so history never blocks a later, legitimate request.
 
   @@index([attendanceId])
   @@index([organizationId, status])

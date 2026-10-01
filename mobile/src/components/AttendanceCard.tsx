@@ -11,8 +11,14 @@ interface AttendanceCardProps {
   attendance: Attendance;
   employeeName: string;
   storeName?: string;
-  /** When provided, the card becomes tappable (e.g. to request a correction). */
-  onPress?: () => void;
+  /** ORGANIZATION_ADMIN only — opens the direct edit screen. */
+  onEdit?: () => void;
+  /** STORE_MANAGER only — opens the correction-request screen. */
+  onRequestCorrection?: () => void;
+  /** A PENDING correction already exists for this record — the card
+   *  becomes non-interactive (no new request can be started) and shows
+   *  that state instead of either action above. */
+  pendingCorrection?: boolean;
 }
 
 const methodLabel: Record<Attendance["method"], string> = {
@@ -23,8 +29,20 @@ const methodLabel: Record<Attendance["method"], string> = {
 // Absent uses the error tone deliberately — the design system's own
 // palette maps "Error / absent" to the same semantic color; it isn't
 // borrowed from a generic failure state.
-export function AttendanceCard({ attendance, employeeName, storeName, onPress }: AttendanceCardProps) {
+export function AttendanceCard({
+  attendance,
+  employeeName,
+  storeName,
+  onEdit,
+  onRequestCorrection,
+  pendingCorrection = false,
+}: AttendanceCardProps) {
   const metaParts = [methodLabel[attendance.method], storeName].filter(Boolean).join(" · ");
+  // A pending correction blocks a *new* correction request (that's the
+  // "no conflicting duplicate requests" rule) but never blocks an
+  // ORGANIZATION_ADMIN's direct edit — admin authority isn't contingent on
+  // whatever a manager happens to have pending.
+  const onPress = onEdit ?? (pendingCorrection ? undefined : onRequestCorrection);
 
   const content = (
     <AppCard style={styles.card}>
@@ -43,7 +61,9 @@ export function AttendanceCard({ attendance, employeeName, storeName, onPress }:
             label={attendance.status === "PRESENT" ? "Present" : "Absent"}
             tone={attendance.status === "PRESENT" ? "success" : "error"}
           />
-          {attendance.checkInAt ? (
+          {pendingCorrection ? (
+            <StatusBadge label="Correction pending" tone="info" />
+          ) : attendance.checkInAt ? (
             <AppText variant="caption" style={styles.checkInTime}>
               {formatTime(attendance.checkInAt)}
             </AppText>
@@ -56,7 +76,11 @@ export function AttendanceCard({ attendance, employeeName, storeName, onPress }:
   if (!onPress) return content;
 
   return (
-    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`Request a correction for ${employeeName}`}>
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={onEdit ? `Edit attendance for ${employeeName}` : `Request a correction for ${employeeName}`}
+    >
       {content}
     </Pressable>
   );
